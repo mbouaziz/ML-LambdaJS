@@ -256,8 +256,7 @@ let arith_sum = arith (+) (+.)
 
 let arith_sub = arith (-) (-.)
 
-(* OCaml syntax failure! Operator section syntax lexes as a comment. *)
-let arith_mul = arith (fun m n -> m * n) (fun x y -> x *. y)
+let arith_mul = arith ( * ) ( *. )
 
 let arith_div x y = try arith (/) (/.) x y
 with Division_by_zero -> Const (CNum infinity)
