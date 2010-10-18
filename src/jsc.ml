@@ -34,10 +34,13 @@ let action_set_lang (lang_in : string) : unit =
     | "ljs" -> lang := "ljs"
     | "es5" -> lang := "es5"
     | _ -> failwith ("unknown language: " ^ lang_in)
-      
+     
+ 
+let xopen_in path = if path = "STDIN" then stdin else open_in path
+
 
 let load_js (path : string) : unit = 
-  let js = parse_javascript_from_channel (open_in path) path in
+  let js = parse_javascript_from_channel (xopen_in path) path in
     match !lang with
       |	"ljs" ->
 	  srcLJS := 
@@ -51,11 +54,11 @@ let load_js (path : string) : unit =
 
 let load_lambdajs (path : string) : unit =
   srcLJS := ESeq (p, !srcLJS,
-		  Lambdajs.parse_lambdajs (open_in path) path)
+		  Lambdajs.parse_lambdajs (xopen_in path) path)
     
 let load_es5 (path : string) : unit =
   srcES5 := ES5s.ESeq (p, !srcES5,
-		       ES5.parse_es5 (open_in path) path)
+		       ES5.parse_es5 (xopen_in path) path)
 
 let load_file (path : string) : unit =
   if Filename.check_suffix path ".js" then
@@ -75,8 +78,8 @@ let desugar () : unit =
 
 let set_env (s : string) =
   match !lang with
-    | "ljs" -> srcLJS := enclose_in_env (parse_env (open_in s) s) !srcLJS
-    | "es5" -> srcES5 := ES5e.enclose_in_env (ES5e.parse_env (open_in s) s) !srcES5
+    | "ljs" -> srcLJS := enclose_in_env (parse_env (xopen_in s) s) !srcLJS
+    | "es5" -> srcES5 := ES5e.enclose_in_env (ES5e.parse_env (xopen_in s) s) !srcES5
     | _ -> failwith ("Unknown language: " ^ !lang)
 
 let action_pretty () : unit =
