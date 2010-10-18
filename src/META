@@ -2,6 +2,6 @@ version = "2.0"
 description = "LambdaJS"
 
 archive(byte) = 
-    "LambdaJS.cma"
+    "ES5.cma"
 archive(native) = 
-    "LambdaJS.cmxa"
+    "ES5.cmxa"

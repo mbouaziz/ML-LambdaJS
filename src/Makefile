@@ -1,26 +1,20 @@
-INSTALLDIR=`ocamlc -where`
-MLFILES=$(wildcard *.ml)
-MLIFILES=$(wildcard *.mli)
 
-.PHONY = clean builddir debug
+.PHONY = clean builddir
 
-OCAMLBUILD = ocamlbuild -build-dir ../build -quiet
+BUILDDIR = ../build
+OCAMLBUILD = ocamlbuild -build-dir $(BUILDDIR) -j 2 -classic-display
 
-debug: builddir
-	$(OCAMLBUILD) jsc.d.byte
+jsc: builddir
+	$(OCAMLBUILD) jsc.native
 
 lib: builddir
-	$(OCAMLBUILD) LambdaJS.cma
-	$(OCAMLBUILD) LambdaJS.cmxa
-	$(OCAMLBUILD) LambdaJS.p.cmxa
-	$(OCAMLBUILD) LambdaJS.d.cma
+	$(OCAMLBUILD) ES5.otarget
 
 clean:
-	rm -rf ../build
+	$(OCAMLBUILD) -clean
 
 builddir:
-	@mkdir ../build 2> /dev/null || true
+	@mkdir $(BUILDDIR) 2> /dev/null || true
 
 install: lib
-	cd ../build && ocamlfind install LambdaJS ../src/META *.mli *.cmi LambdaJS.cma LambdaJS.cmxa LambdaJS.d.cma LambdaJS.p.cmxa LambdaJS.a LambdaJS.p.a
-
+	cd $(BUILDDIR) && ocamlfind install ES5 ../src/META ES5.cma ES5.cmxa ES5.a es5_*.cmi exprjs_syntax.cmi *Ext.cmi javaScript*.cmi prelude.cmi
