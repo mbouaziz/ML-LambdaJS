@@ -221,7 +221,7 @@ and fun_obj value = match value with
   | _ -> false
 	  
 
-let rec eval exp env = match exp with
+let rec eval (exp : prim_exp) env = match exp with
   | EConst (p, c) -> Const (c)
   | EId (p, x) -> begin
       try
@@ -301,27 +301,18 @@ let rec eval exp env = match exp with
       let f_val = eval field env in
       let v_val = eval newval env in
 	set_attr attr obj_val f_val v_val
-  | EOp1 (p, op, e) ->
+  | EOp1 (p, `Prim1 str, e) ->
       let e_val = eval e env in
-	begin match op with
-	  | Prim1 str -> op1 str e_val
-	  | _ -> failwith ("[interp] Invalid EOp1 form")
-	end
-  | EOp2 (p, op, e1, e2) -> 
+      op1 str e_val
+  | EOp2 (p, `Prim2 str, e1, e2) ->
       let e1_val = eval e1 env in
       let e2_val = eval e2 env in
-	begin match op with
-	  | Prim2 str -> op2 str e1_val e2_val
-	  | _ -> failwith ("[interp] Invalid EOp2 form")
-	end
-  | EOp3 (p, op, e1, e2, e3) -> 
+      op2 str e1_val e2_val
+  | EOp3 (p, `Prim3 str, e1, e2, e3) ->
       let e1_val = eval e1 env in
       let e2_val = eval e2 env in
       let e3_val = eval e3 env in
-	begin match op with
-	  | Prim3 str -> op3 str e1_val e2_val e3_val
-	  | _ -> failwith ("[interp] Invalid EOp3 form")
-	end
+      op3 str e1_val e2_val e3_val
   | EIf (p, c, t, e) ->
       let c_val = eval c env in
 	if (c_val = Const (CBool true))

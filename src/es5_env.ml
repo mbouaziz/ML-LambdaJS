@@ -2,9 +2,9 @@ open Prelude
 open Es5_syntax
 open Lexing
 
-type parsed_env = exp -> exp
+type ('a, 'b, 'c) parsed_env = ('a, 'b, 'c) exp -> ('a, 'b, 'c) exp
 
-let parse_env cin name : parsed_env =
+let parse_env cin name  =
   let lexbuf = Lexing.from_channel cin in
     try 
       (* Set the correct filename in lexbuf (for source-tracking). *)
@@ -21,5 +21,4 @@ let parse_env cin name : parsed_env =
                        (string_of_position 
                           (lexbuf.lex_curr_p, lexbuf.lex_curr_p)))
 
-let rec enclose_in_env (env : parsed_env) (exp : exp) : exp =
-  env exp
+let enclose_in_env env exp = env exp

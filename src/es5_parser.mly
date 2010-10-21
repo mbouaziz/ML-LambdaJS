@@ -5,7 +5,7 @@ open JavaScript_syntax
 open Desugar_helpers
 
 (* All free variables "x" in the environment are renamed to "[[x]]" *)
-let rename_env exp : exp  =
+let rename_env exp =
   let ren v exp = rename v ("[[" ^ v ^ "]]") exp in
   IdSet.fold ren (fv exp) exp
 
@@ -128,8 +128,8 @@ let rec func_object p ids lambda_exp =
 /* http://stackoverflow.com/questions/1737460/
    how-to-find-shift-reduce-conflict-in-this-yacc-file */
 
-%type <Es5_syntax.exp> prog
-%type <Es5_syntax.exp -> Es5_syntax.exp> env
+%type <Es5_syntax.prim_exp> prog
+%type <('op1, 'op2, 'op3) Es5_syntax.exp -> ('op1, 'op2, 'op3) Es5_syntax.exp> env
 
 %start prog
 %start env
@@ -210,25 +210,25 @@ atom :
 	 func_object p ids (func_expr_lambda p ids body)
      }
  | TYPEOF atom
-     { EOp1 (($startpos, $endpos), Prim1 "typeof", $2) }
+     { EOp1 (($startpos, $endpos), `Prim1 "typeof", $2) }
      
 exp :
  | atom { $1 }
  | exp LPAREN exps RPAREN 
    { EApp (($startpos, $endpos), $1, $3) }
  | PRIM LPAREN STRING COMMA seq_exp COMMA seq_exp COMMA seq_exp RPAREN
-   { EOp3 (($startpos, $endpos), Prim3 $3, $5, $7, $9) }
+   { EOp3 (($startpos, $endpos), `Prim3 $3, $5, $7, $9) }
  | PRIM LPAREN STRING COMMA seq_exp COMMA seq_exp RPAREN
-   { EOp2 (($startpos, $endpos), Prim2 $3, $5, $7) }
+   { EOp2 (($startpos, $endpos), `Prim2 $3, $5, $7) }
  | PRIM LPAREN STRING COMMA seq_exp RPAREN
-   { EOp1 (($startpos, $endpos), Prim1 $3, $5) }
+   { EOp1 (($startpos, $endpos), `Prim1 $3, $5) }
  | ID COLONEQ exp
    { ESet (($startpos, $endpos), $1, $3) }
  | exp EQEQEQUALS exp
-     { EOp2 (($startpos, $endpos), Prim2 "stx=", $1, $3) }
+     { EOp2 (($startpos, $endpos), `Prim2 "stx=", $1, $3) }
  | exp BANGEQEQUALS exp
      { let p = ($startpos, $endpos) in
-         EIf (p, EOp2 (p, Prim2 "stx=", $1, $3),
+         EIf (p, EOp2 (p, `Prim2 "stx=", $1, $3),
               EConst (p, CBool false),
               EConst (p, CBool true)) }
  | exp LBRACK seq_exp EQUALS seq_exp RBRACK

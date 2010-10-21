@@ -97,16 +97,16 @@ let rec exp e = match e with
 		    exp e])
 
 and op1_string op = match op with
-  | Op1Prefix op_id -> op_id
-  | Prim1 str -> "~" ^ str ^ "~"
+  | `Op1Prefix op_id -> op_id
+  | `Prim1 str -> "~" ^ str ^ "~"
 
 and op2_string op = match op with
-  | Op2Infix op_id -> op_id
-  | Prim2 str -> "~" ^ str ^ "~"
+  | `Op2Infix op_id -> op_id
+  | `Prim2 str -> "~" ^ str ^ "~"
 
 and op3_string op = match op with
-  | Op3Prefix op_id -> op_id
-  | Prim3 str -> "~" ^ str ^ "~"
+  | `Op3Prefix op_id -> op_id
+  | `Prim3 str -> "~" ^ str ^ "~"
     
 and attr (name, value) = parens (horz [text ("\"" ^ name ^ "\""); exp value])
 

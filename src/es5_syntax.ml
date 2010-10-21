@@ -24,52 +24,51 @@ end
 
 module AttrMap = Map.Make (AttrOrderedType)
 
-type op1 = 
-  | Op1Prefix of id
-  | Prim1 of string
+type op1 = [ `Op1Prefix of id | `Prim1 of string ]
 
-type op2 = 
-  | Op2Infix of id
-  | Prim2 of string
+type op2 = [ `Op2Infix of id | `Prim2 of string ]
 
-type op3 =
-  | Op3Prefix of id
-  | Prim3 of string
+type op3 = [ `Op3Prefix of id | `Prim3 of string ]
 
-type exp =
+type ('op1, 'op2, 'op3) exp =
   | EConst of pos * JavaScript_syntax.const
   | EId of pos * id
-  | EObject of pos * (string * exp) list *
-      (string * (attr * exp) list) list
+  | EObject of pos * (string * ('op1, 'op2, 'op3) exp) list *
+      (string * (attr * ('op1, 'op2, 'op3) exp) list) list
       (** object, field, new value, args object *)
-  | EUpdateFieldSurface of pos * exp * exp * exp * exp
+  | EUpdateFieldSurface of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
       (** object, field, args object *)
-  | EGetFieldSurface of pos * exp * exp * exp
-  | EAttr of pos * attr * exp * exp
-  | ESetAttr of pos * attr * exp * exp * exp
-  | EUpdateField of pos * exp * exp * exp * exp * exp
-  | EGetField of pos * exp * exp * exp * exp
-  | EDeleteField of pos * exp * exp
-  | ESet of pos * id * exp
-  | EOp1 of pos * op1 * exp
-  | EOp2 of pos * op2 * exp * exp
-  | EOp3 of pos * op3 * exp * exp * exp
-  | EIf of pos * exp * exp * exp
-  | EApp of pos * exp * exp list
-  | ESeq of pos * exp * exp
-  | ELet of pos * id * exp * exp
-  | EFix of pos * id * exp
-  | ELabel of pos * id * exp
-  | EBreak of pos * id * exp
-  | ETryCatch of pos * exp * exp
+  | EGetFieldSurface of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | EAttr of pos * attr * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | ESetAttr of pos * attr * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | EUpdateField of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | EGetField of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | EDeleteField of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | ESet of pos * id * ('op1, 'op2, 'op3) exp
+  | EOp1 of pos * 'op1 * ('op1, 'op2, 'op3) exp
+  | EOp2 of pos * 'op2 * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | EOp3 of pos * 'op3 * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | EIf of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | EApp of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp list
+  | ESeq of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | ELet of pos * id * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | EFix of pos * id * ('op1, 'op2, 'op3) exp
+  | ELabel of pos * id * ('op1, 'op2, 'op3) exp
+  | EBreak of pos * id * ('op1, 'op2, 'op3) exp
+  | ETryCatch of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
       (** Catch block must be an [ELambda] *)
-  | ETryFinally of pos * exp * exp
-  | EThrow of pos * exp
-  | ELambda of pos * id list * exp
+  | ETryFinally of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
+  | EThrow of pos * ('op1, 'op2, 'op3) exp
+  | ELambda of pos * id list * ('op1, 'op2, 'op3) exp
+
+
+type src_exp = (op1, op2, op3) exp
+type prim_exp = ([ `Prim1 of string], [ `Prim2 of string], [ `Prim3 of string]) exp
+
 
 (******************************************************************************)
 
-let rename (x : id) (y : id) (exp : exp) : exp = 
+let rename (x : id) (y : id) exp =
   let rec ren exp = match exp with
     | EConst _ -> exp
     | EId (p, z) -> EId (p, if z = x then y else z)
@@ -115,7 +114,7 @@ let rename (x : id) (y : id) (exp : exp) : exp =
   in ren exp
 
 
-let rec fv (exp : exp) : IdSet.t = match exp with
+let rec fv exp : IdSet.t = match exp with
   | EConst _ -> IdSet.empty
   | EId (_, x) -> IdSet.singleton x
   | EObject (_, attrs, fields) -> 

@@ -25,8 +25,19 @@ module H = Hashtbl
 
 let p = (Lexing.dummy_pos, Lexing.dummy_pos)
 
+type exptype = SrcExp of ES5s.src_exp | PrimExp of ES5s.prim_exp
+
+let prim_to_src (e : ES5s.prim_exp) : ES5s.src_exp = (e :> ES5s.src_exp)
+
+let primexp = function
+  | SrcExp e -> ES5ds.check_op e
+  | PrimExp e -> e
+let srcexp = function
+  | SrcExp e -> e
+  | PrimExp e -> prim_to_src e
+
 let srcLJS = ref (EConst (p, JavaScript_syntax.CUndefined))
-let srcES5 = ref (ES5s.EConst (p, JavaScript_syntax.CUndefined))
+let srcES5 = ref (PrimExp (ES5s.EConst (p, JavaScript_syntax.CUndefined)))
 let lang = ref "es5"
 
 let action_set_lang (lang_in : string) : unit = 
@@ -47,9 +58,9 @@ let load_js (path : string) : unit =
 	    ESeq (p, !srcLJS,
 		  Lambdajs_syntax.desugar (Exprjs_syntax.from_javascript js))
       | "es5" ->
-	  srcES5 := 
-	    ES5s.ESeq (p, !srcES5,
-		       ES5ds.ds_top (Exprjs_syntax.from_javascript js))
+	  srcES5 :=
+	    SrcExp (ES5s.ESeq (p, srcexp !srcES5,
+			       ES5ds.ds_top (Exprjs_syntax.from_javascript js)))
       | _ -> failwith ("Unknown language: " ^ !lang)
 
 let load_lambdajs (path : string) : unit =
@@ -57,8 +68,10 @@ let load_lambdajs (path : string) : unit =
 		  Lambdajs.parse_lambdajs (xopen_in path) path)
     
 let load_es5 (path : string) : unit =
-  srcES5 := ES5s.ESeq (p, !srcES5,
-		       ES5.parse_es5 (xopen_in path) path)
+  let parsed = ES5.parse_es5 (xopen_in path) path in
+  srcES5 := match !srcES5 with
+  | SrcExp e -> SrcExp (ES5s.ESeq (p, e, prim_to_src parsed))
+  | PrimExp e -> PrimExp (ES5s.ESeq (p, e, parsed))
 
 let load_file (path : string) : unit =
   if Filename.check_suffix path ".js" then
@@ -73,19 +86,23 @@ let load_file (path : string) : unit =
 let desugar () : unit =
   match !lang with
     | "ljs" -> srcLJS := Lambdajs_desugar.desugar_op !srcLJS
-    | "es5" -> srcES5 := ES5ds.desugar !srcES5
+    | "es5" -> srcES5 := PrimExp (ES5ds.desugar (srcexp !srcES5))
     | _ -> failwith ("Unknown language: " ^ !lang)
 
 let set_env (s : string) =
   match !lang with
     | "ljs" -> srcLJS := enclose_in_env (parse_env (xopen_in s) s) !srcLJS
-    | "es5" -> srcES5 := ES5e.enclose_in_env (ES5e.parse_env (xopen_in s) s) !srcES5
+    | "es5" -> let parsed x = ES5e.parse_env (xopen_in s) s x in
+      srcES5 := begin match !srcES5 with
+      | PrimExp e -> PrimExp (ES5e.enclose_in_env parsed e)
+      | SrcExp e -> SrcExp (ES5e.enclose_in_env parsed e)
+      end
     | _ -> failwith ("Unknown language: " ^ !lang)
 
 let action_pretty () : unit =
   match !lang with
     | "ljs" -> failwith ("Pretty not implemented for " ^ !lang)
-    | "es5" -> Es5_pretty.exp !srcES5 std_formatter;
+    | "es5" -> Es5_pretty.exp (srcexp !srcES5) std_formatter;
 	print_newline ()
     | _ -> failwith ("Unknown language: " ^ !lang)
 
@@ -95,7 +112,7 @@ let action_cps () : unit =
 
 let action_eval () : unit =
   match !lang with
-    | "es5" -> ignore (ES5eval.eval_expr !srcES5); print_newline ()
+    | "es5" -> ignore (ES5eval.eval_expr (primexp !srcES5)); print_newline ()
     | _ -> failwith ("Not implemented for language: " ^ !lang)
 
 let action_operators () : unit =
