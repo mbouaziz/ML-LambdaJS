@@ -4,12 +4,6 @@ open Es5_syntax
 
 type value =
   | Const of JavaScript_syntax.const
-      (* A VarCell can contain an ObjCell, but not vice versa.  This
-      mimics the semantics of heap-like object refs alongside mutable
-      variables *)
-  | VarCell of value ref 
-      (* Objects shouldn't have VarCells in them, but can have any of
-      the other kinds of values *)
   | ObjCell of (value IdMap.t * ((value AttrMap.t) IdMap.t)) ref
   | Closure of (value list -> value)
   | Fail of string
@@ -31,7 +25,6 @@ let rec pretty_value v = match v with
     end
   | Closure c -> "function"
   | ObjCell o -> "object"
-  | VarCell v -> "&<" ^ pretty_value !v ^ ">"
   | Fail s -> "[fail: " ^ s ^ "]"
 
 let rec pretty_value_list vs = match vs with

@@ -225,22 +225,16 @@ let rec eval exp env = match exp with
   | EConst (p, c) -> Const (c)
   | EId (p, x) -> begin
       try
-	match IdMap.find x env with
-	  | VarCell v -> !v
-	  | _ -> failwith ("[interp] (EId) Expected a VarCell for variable " ^ x ^ 
-			     " at " ^ (string_of_position p) ^ 
-			     ", but found something else: " ^ pretty_value (IdMap.find x env))
+	let varcell = IdMap.find x env in
+	!varcell
       with Not_found ->
 	failwith ("[interp] Unbound identifier: " ^ x ^ " in identifier lookup at " ^
 		    (string_of_position p))
     end
   | ESet (p, x, e) -> begin
       try
-	match IdMap.find x env with
-	  | VarCell v -> v := eval e env; !v
-	  | _ -> failwith ("[interp] (ESet) Expected a VarCell for variable " ^ x ^ 
-			     " at " ^ (string_of_position p) ^ 
-			     ", but found something else.")
+	let varcell = IdMap.find x env in
+	varcell := eval e env; !varcell
       with Not_found ->
 	failwith ("[interp] Unbound identifier: " ^ x ^ " in set! at " ^
 		    (string_of_position p))
@@ -349,10 +343,10 @@ let rec eval exp env = match exp with
       eval e2 env
   | ELet (p, x, e, body) ->
       let e_val = eval e env in
-	eval body (IdMap.add x (VarCell (ref e_val)) env)
+	eval body (IdMap.add x (ref e_val) env)
   | EFix (p, x, e) ->
       let x_var = ref (Const CUndefined) in
-      let e_val = eval e (IdMap.add x (VarCell x_var) env) in begin
+      let e_val = eval e (IdMap.add x x_var env) in begin
 	  x_var := e_val;
 	  e_val
 	end
@@ -380,7 +374,7 @@ let rec eval exp env = match exp with
       eval fin env
   | EThrow (p, e) -> raise (Throw (eval e env))
   | ELambda (p, xs, e) -> 
-      let set_arg arg x m = IdMap.add x (VarCell (ref arg)) m in
+      let set_arg arg x m = IdMap.add x (ref arg) m in
 	Closure (fun args -> 
 		     if (List.length args) != (List.length xs) then
 		       arity_mismatch_err p xs args
