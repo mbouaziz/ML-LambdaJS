@@ -33,9 +33,11 @@ let typeof v = str begin match v with
       | CNum _ -> "number"
       | CInt _ -> "number"
       | CBool _ -> "boolean"
+      | CRegexp _ -> failwith "typeof CRegexp"
     end
   | ObjCell _ -> "object"
   | Closure _ -> "lambda"
+  | Fail _ -> failwith "typeof Fail"
 end
 
 let surface_typeof v = str begin match v with
@@ -46,6 +48,7 @@ let surface_typeof v = str begin match v with
       | CNum _ -> "number"
       | CInt _ -> "number"
       | CBool _ -> "boolean"
+      | CRegexp _ -> failwith "surface_typeof regexp"
     end
   | ObjCell o -> let (attrs, _) = !o in
       if (IdMap.mem "code" attrs) then "function" else "object"
@@ -74,6 +77,7 @@ let prim_to_str v = str begin match v with
       | CNum n -> float_str n
       | CInt n -> string_of_int n
       | CBool b -> string_of_bool b
+      | CRegexp _ -> failwith "prim_to_str regexp"
     end
   | _ -> raise (Throw (str "prim_to_str"))
 end
@@ -89,6 +93,7 @@ let prim_to_num v = num begin match v with
       | CInt n -> float_of_int n
       | CString s -> begin try float_of_string s
         with Failure _ -> nan end
+      | CRegexp _ -> failwith "prim_to_num regexp"
     end
   | _ -> raise (Throw (str "prim_to_str"))
 end
@@ -101,6 +106,7 @@ let prim_to_bool v = bool begin match v with
       | CNum x -> not (x == nan || x = 0.0 || x = -0.0)
       | CInt n -> not (n = 0)
       | CString s -> not (String.length s = 0)
+      | CRegexp _ -> failwith "prim_to_bool regexp"
     end
   | _ -> true
 end

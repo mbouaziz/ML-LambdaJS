@@ -339,7 +339,7 @@ let rec eval exp env = match exp with
 	  | _, _ -> failwith ("[interp] Inapplicable value: " ^ pretty_value func_value ^ ", applied to " ^ pretty_value_list args_values ^ ", at " ^ string_of_position p)
 	end
   | ESeq (p, e1, e2) -> 
-      eval e1 env;
+      ignore (eval e1 env);
       eval e2 env
   | ELet (p, x, e, body) ->
       let e_val = eval e env in

@@ -93,8 +93,6 @@ rule token = parse
    | ">" { GT }
    | "=" { EQUALS }
    | "," { COMMA }
-   | "!" { DEREF }
-   | "ref" { REF }
    | ":" { COLON }
    | ":=" { COLONEQ }
    | "prim" { PRIM }

@@ -22,6 +22,7 @@ let rec pretty_value v = match v with
       | CBool b -> string_of_bool b
       | CUndefined -> "undefined"
       | CNull -> "null"
+      | CRegexp (re, g, i) -> "/" ^ re ^ "/" ^ (if g then "g" else "") ^ (if i then "i" else "")
     end
   | Closure c -> "function"
   | ObjCell o -> "object"
