@@ -158,8 +158,12 @@ all languages");
     load_file
     "Usage: jsc <action> [path] ...";;
 
-main ();
-Printexc.print !action ();
-
-pp_print_flush std_formatter ();
-pp_print_flush err_formatter ()
+let _ =
+  Printexc.record_backtrace true;
+  let _ = try main (); !action () with
+    e ->
+      print_endline (Printexc.to_string e);
+      Printexc.print_backtrace stdout
+  in
+  pp_print_flush std_formatter ();
+  pp_print_flush err_formatter ()
