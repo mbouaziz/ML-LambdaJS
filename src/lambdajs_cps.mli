@@ -39,7 +39,7 @@ and lambda = id * id list * cpsexp
 
 val cps : exp -> cpsexp
 
-val p_cpsexp : cpsexp -> FormatExt.printer
+val p_cpsexp : cpsexp -> Format.printer
 
 val cpsexp_idx : cpsexp -> int
 
@@ -56,7 +56,7 @@ val fv : cpsexp -> IdSet.t
 val fv_immediate : cpsexp -> IdSet.t
 
 module Pretty : sig
-  open FormatExt
+  open Format
 
   val p_cpsval : cpsval -> printer
   val p_bindexp : bindexp -> printer

@@ -1,6 +1,6 @@
 open Prelude
 open Lambdajs_cps
-open FormatExt
+open Format
 
 type loc = 
   | Loc of int
@@ -9,7 +9,7 @@ type loc =
 module Loc : sig
   type t = loc
   val compare : t -> t -> int
-  val pp : t -> FormatExt.printer
+  val pp : t -> Format.printer
 end
 
 
@@ -41,17 +41,10 @@ module RT : sig
 end
 
 module RTSet : Set.S with type elt = RT.t
-module RTSetExt : SetExt.S with type elt = RT.t with type t = RTSet.t
 
 module AVSet : Set.S with type elt = AV.t
 
-module AVSetExt : SetExt.S 
-  with type elt = AV.t
-  and type t = AVSet.t
-
-
 module Heap : Map.S with type key = Loc.t
-module HeapExt : MapExt.S with type key = Loc.t with type +'a t = 'a Heap.t
 
 type heap
 
@@ -82,9 +75,9 @@ val lookup : id -> env -> Type.t
 
 val bind : id -> Type.t -> env -> env
 
-val p_env : env -> FormatExt.printer
+val p_env : env -> Format.printer
 
-val p_heap : heap -> FormatExt.printer
+val p_heap : heap -> Format.printer
 
 val empty_env : env
 

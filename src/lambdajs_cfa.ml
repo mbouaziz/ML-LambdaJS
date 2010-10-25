@@ -1,4 +1,4 @@
-open FormatExt
+open Format
 open Prelude
 open Lambdajs_cps
 open Lambdajs_lattice

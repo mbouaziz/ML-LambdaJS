@@ -6,7 +6,6 @@ let from_javascript = Exprjs_syntax.from_javascript
 module Pretty = struct
 
   open Format
-  open FormatExt
 
   let rec expr e = match e with
     | ConstExpr (_, c) -> JavaScript.Pretty.p_const c

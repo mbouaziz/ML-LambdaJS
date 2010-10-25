@@ -175,7 +175,7 @@ let rec ds_expr (env : env) (expr : expr) : exp = match expr with
         ELambda 
           (p, [ "this"; "arguments"],
            List.fold_right2 get_arg args (iota (List.length args))
-             (fold_right init_var (IdSetExt.to_list vars)
+             (fold_right init_var (IdSet.to_list vars)
                 (ds_expr env body)))
   | FuncStmtExpr (p, f, args, body) ->
       EOp2 (p, SetRef, EId (p, f), ds_expr env (FuncExpr (p, args, body)))
@@ -194,7 +194,6 @@ let desugar (expr : expr) = ds_expr IdMap.empty expr
 module Pretty = struct
 
   open Format
-  open FormatExt
     
   let p_op1 op = match op with
     | Op1Prefix o -> text ("unsafe-" ^ o)
@@ -217,23 +216,23 @@ end
 let rec fv (exp : exp) : IdSet.t = match exp with
   | EConst _ -> IdSet.empty
   | EId (_, x) -> IdSet.singleton x
-  | EObject (_, fields) -> IdSetExt.unions (map (fun (_, _, e) -> fv e) fields)
-  | EUpdateField (_, e1, e2, e3) -> IdSetExt.unions (map fv [e1; e2; e3])
+  | EObject (_, fields) -> IdSet.unions (map (fun (_, _, e) -> fv e) fields)
+  | EUpdateField (_, e1, e2, e3) -> IdSet.unions (map fv [e1; e2; e3])
   | EOp1 (_, _, e) -> fv e
   | EOp2 (_, _, e1, e2) -> IdSet.union (fv e1) (fv e2)
-  | EIf (_, e1, e2, e3) -> IdSetExt.unions (map fv [e1; e2; e3])
-  | EApp (_, f, args) -> IdSetExt.unions (map fv (f :: args))
+  | EIf (_, e1, e2, e3) -> IdSet.unions (map fv [e1; e2; e3])
+  | EApp (_, f, args) -> IdSet.unions (map fv (f :: args))
   | ESeq (_, e1, e2) -> IdSet.union (fv e1) (fv e2)
   | ELet (_, x, e1, e2) -> IdSet.union (fv e1) (IdSet.remove x (fv e2))
   | EFix (_, binds, body) ->
-      IdSet.diff (IdSetExt.unions (map fv (body :: (map snd2 binds))))
-        (IdSetExt.from_list (map fst2 binds))
+      IdSet.diff (IdSet.unions (map fv (body :: (map snd2 binds))))
+        (IdSet.from_list (map fst2 binds))
   | ELabel (_, _, e) -> fv e
   | EBreak (_, _, e) -> fv e
   | ETryCatch (_, e1, e2) -> IdSet.union (fv e1) (fv e2)
   | ETryFinally (_, e1, e2) -> IdSet.union (fv e1) (fv e2)
   | EThrow (_, e) ->  fv e
-  | ELambda (_, args, body) -> IdSet.diff (fv body) (IdSetExt.from_list args)
+  | ELambda (_, args, body) -> IdSet.diff (fv body) (IdSet.from_list args)
 
 let rename (x : id) (y : id) (exp : exp) : exp = 
   let rec ren exp = match exp with
@@ -266,20 +265,20 @@ let rec operators (exp : exp) : IdSet.t = match exp with
   | EConst _ -> IdSet.empty
   | EId (_, x) -> IdSet.empty
   | EObject (_, fields) ->
-      IdSetExt.unions (map (fun (_, _, e) -> operators e) fields)
+      IdSet.unions (map (fun (_, _, e) -> operators e) fields)
   | EUpdateField (_, e1, e2, e3) ->
-      IdSetExt.unions (map operators [e1; e2; e3])
+      IdSet.unions (map operators [e1; e2; e3])
   | EOp1 (_, Prim1 s, e) -> IdSet.add (s ^ "/1") (operators e)
   | EOp1 (_, _, e) -> operators e
   | EOp2 (_, Prim2 s, e1, e2) -> 
       IdSet.add (s ^ "/2") (IdSet.union (operators e1) (operators e2))
   | EOp2 (_, _, e1, e2) -> IdSet.union (operators e1) (operators e2)
-  | EIf (_, e1, e2, e3) -> IdSetExt.unions (map operators [e1; e2; e3])
-  | EApp (_, f, args) -> IdSetExt.unions (map operators (f :: args))
+  | EIf (_, e1, e2, e3) -> IdSet.unions (map operators [e1; e2; e3])
+  | EApp (_, f, args) -> IdSet.unions (map operators (f :: args))
   | ESeq (_, e1, e2) -> IdSet.union (operators e1) (operators e2)
   | ELet (_, x, e1, e2) -> IdSet.union (operators e1) (operators e2)
   | EFix (_, binds, body) ->
-      IdSetExt.unions (map operators (body :: (map snd2 binds)))
+      IdSet.unions (map operators (body :: (map snd2 binds)))
   | ELabel (_, _, e) -> operators e
   | EBreak (_, _, e) -> operators e
   | ETryCatch (_, e1, e2) -> IdSet.union (operators e1) (operators e2)

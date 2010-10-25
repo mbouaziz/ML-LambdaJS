@@ -5,7 +5,7 @@ val from_javascript : JavaScript_syntax.prog -> expr
 
 module Pretty : sig
 
-  open FormatExt
+  open Format
 
   val p_expr : expr -> printer
 end

@@ -55,7 +55,6 @@ let parse_expr cin name =
 module Pretty = struct
 
   open Format
-  open FormatExt
 
   let p_const e = match e with
     | CString s -> text  ("\"" ^ String.escaped s ^ "\"")

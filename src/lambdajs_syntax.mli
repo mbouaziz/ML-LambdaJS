@@ -1,5 +1,5 @@
 open Prelude
-open FormatExt
+open Format
 
 type op1 = 
   | Op1Prefix of id

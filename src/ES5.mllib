@@ -1,7 +1,4 @@
 Prelude
-SetExt
-MapExt
-FormatExt
 JavaScript_syntax
 JavaScript_lexer
 JavaScript_parser

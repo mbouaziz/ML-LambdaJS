@@ -11,7 +11,7 @@ module Loc = struct
 
   let compare = Pervasives.compare
 
-  open FormatExt
+  open Format
 
   let pp loc = match loc with
     | Loc n -> int n
@@ -31,7 +31,7 @@ module RT = struct
 
   let compare = Pervasives.compare
 
-  open FormatExt
+  open Format
 
   let pp v = match v with
     | Number -> text "number"
@@ -55,13 +55,13 @@ module AV = struct
       
   let compare = Pervasives.compare 
 
-  open FormatExt
+  open Format
 
   let pp v = match v with
   | AConst c -> JavaScript.Pretty.p_const c
   | ARef l ->  sep [ text "*"; Loc.pp l ]
   | AObj dict ->
-      IdMapExt.p_map (fun s -> text ("\"" ^ String.escaped s ^ "\"")) Loc.pp
+      IdMap.p_map (fun s -> text ("\"" ^ String.escaped s ^ "\"")) Loc.pp
         dict
   | AClosure (n, args, _) -> text ("closure" ^ string_of_int n)
   | ABool -> text "boolean"
@@ -71,12 +71,9 @@ module AV = struct
 end
 
 module AVSet = Set.Make (AV)
-module AVSetExt = SetExt.Make (AVSet)
 module RTSet = Set.Make (RT)
-module RTSetExt = SetExt.Make (RTSet)
 
 module Heap = Map.Make (Loc)
-module HeapExt = MapExt.Make (Loc) (Heap)
 
 type heap = AVSet.t Heap.t
 
@@ -85,7 +82,7 @@ let deref loc heap =
     Heap.find loc heap
   with Not_found ->
     eprintf "%s is not a location in the heap " 
-      (FormatExt.to_string Loc.pp loc);
+      (Format.to_string Loc.pp loc);
     raise Not_found
 
 module Type = struct
@@ -117,13 +114,13 @@ module Type = struct
 
 
 
-  open FormatExt
+  open Format
 
   let pp t = match t with
-    | Set set -> AVSetExt.p_set AV.pp set
+    | Set set -> AVSet.p_set AV.pp set
     | LocTypeof x -> sep [ text "typeof"; Loc.pp x ]
     | LocTypeIs (x, t) -> sep [ text "typeis";  Loc.pp x; 
-                                 RTSetExt.p_set RT.pp t ]
+                                 RTSet.p_set RT.pp t ]
     | Deref l -> sep [ text "deref"; Loc.pp l ]
 
 end
@@ -131,7 +128,7 @@ end
 
 type env = Type.t IdMap.t
 
-open FormatExt
+open Format
 
 
 let singleton t = Type.Set (AVSet.singleton t)
@@ -139,18 +136,18 @@ let singleton t = Type.Set (AVSet.singleton t)
 let empty = Type.Set AVSet.empty
 
 let union_env heap (env1 : env) (env2 : env) : env = 
-  IdMapExt.join (fun _ -> Type.union heap) env1 env2
+  IdMap.join (fun _ -> Type.union heap) env1 env2
 
-let p_env env = IdMapExt.p_map text Type.pp env
+let p_env env = IdMap.p_map text Type.pp env
 
-let p_heap heap = HeapExt.p_map Loc.pp (AVSetExt.p_set AV.pp) heap
+let p_heap heap = Heap.p_map Loc.pp (AVSet.p_set AV.pp) heap
 
 let lookup (x : id) (env : env) =
   try
     IdMap.find x env
   with Not_found ->
     eprintf "%s is unbound in the environment:\n%s\n" x
-    (FormatExt.to_string p_env env);
+    (Format.to_string p_env env);
     raise Not_found
 
 let bind (x : id) v  (env : env) : env = IdMap.add x v env
@@ -158,7 +155,7 @@ let bind (x : id) v  (env : env) : env = IdMap.add x v env
 let empty_env = IdMap.add "[[exit]]" (singleton AV.ABool) IdMap.empty
 
 
-let union_heap h1 h2 = HeapExt.join (fun _ -> AVSet.union) h1 h2
+let union_heap h1 h2 = Heap.join (fun _ -> AVSet.union) h1 h2
 
 let set_ref loc value heap =
   Heap.add loc value heap

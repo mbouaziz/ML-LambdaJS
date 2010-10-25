@@ -3,7 +3,6 @@ open Es5_syntax
 module S = JavaScript_syntax
 
 open Format
-open FormatExt
 
 let rec exp e = match e with
   | EConst (_, c) -> const c

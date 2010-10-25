@@ -4,6 +4,11 @@ type pos = Lexing.position * Lexing.position
 
 val dummy_pos : Lexing.position * Lexing.position
 
+module IdOrderedType : sig
+  type t = id
+  val compare : t -> t -> int
+end
+
 module Pos : sig
   type t = pos
   val compare : t -> t -> int
@@ -11,40 +16,79 @@ module Pos : sig
 end
 
 
+module Format :
+sig
+  include FormatSig.S
+
+  type printer = formatter -> unit
+  val nest : printer -> printer
+  val sep : printer list -> printer
+  val squish : printer list -> printer
+  val vert : printer list -> printer
+  val horz : printer list -> printer
+  val text : string -> printer
+  val int : int -> printer
+  val enclose : string -> string -> printer -> printer
+  val parens : printer -> printer
+  val braces : printer -> printer
+  val brackets : printer -> printer
+  val angles : printer -> printer
+    (** [to_string f x] uses [Format.str_formatter] as the buffer for printing [x]
+	with [f]. *)
+  val to_string : ('a -> printer) -> 'a -> string
+end
+
+module Set : sig
+  open Format
+  module type OrderedType = Set.OrderedType
+  module type S =
+  sig
+    include Set.S
+      
+    val unions : t list -> t
+    val from_list : elt list -> t
+    val to_list : t -> elt list
+    val p_set : (elt -> printer) -> t -> printer
+  end
+  module Make (Ord : OrderedType) : S with type elt = Ord.t
+end
+
+module Map :
+sig
+  open Format
+  module type OrderedType = Map.OrderedType
+  module type S =
+  sig
+    include Map.S
+
+    val find_opt : key -> 'a t -> 'a option
+    val mem_binding : key -> 'a -> 'a t -> bool
+    val from_list : (key * 'a) list -> 'a t
+    val to_list : 'a t -> (key * 'a) list
+    val keys : 'a t -> key list
+    val values : 'a t -> 'a list
+    val union : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+    val join : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
+    val p_map : (key -> printer) -> ('a -> printer) -> 'a t -> printer
+    val diff : 'a t -> 'a t -> 'a t
+  end
+  module Make (Ord : OrderedType) : S with type key = Ord.t
+end
+
 module IntSet : Set.S
   with type elt = int
-
-module IntSetExt : SetExt.S
-  with type elt = int
-  and type t = IntSet.t
 
 module IdSet : Set.S 
   with type elt = id
 
-module IdSetExt : SetExt.S 
-  with type elt = id 
-  and type t = IdSet.t
-
 module PosSet : Set.S 
   with type elt = pos
-
-module PosSetExt : SetExt.S 
-  with type elt = pos
-  and type t = PosSet.t
 
 module PosMap : Map.S
   with type key = pos
 
-module PosMapExt : MapExt.S
-  with type key = pos
-  with type +'a t = 'a PosMap.t
-
 module IdMap : Map.S
   with type key = id
-
-module IdMapExt : MapExt.S
-  with type key = id
-  with type +'a t = 'a IdMap.t
 
 val fold_left : ('a -> 'b -> 'a) -> 'a -> 'b list -> 'a
 

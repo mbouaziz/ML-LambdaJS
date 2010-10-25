@@ -53,7 +53,7 @@ let infix_of_assignOp op = match op with
   | S.OpAssignBOr -> S.OpBOr
   | S.OpAssign -> failwith "infix_of_assignOp applied to OpAssign"
 
-let string_of_infixOp = FormatExt.to_string JavaScript.Pretty.p_infixOp
+let string_of_infixOp = Format.to_string JavaScript.Pretty.p_infixOp
 
 let rec seq a e1 e2 = match e1 with
   | SeqExpr (a', e11, e12) -> SeqExpr (a, e11, seq a' e12 e2)
@@ -69,7 +69,7 @@ let rec expr (e : S.expr) = match e with
   | S.BracketExpr (a,e1,e2) -> BracketExpr (a,expr e1,expr e2)
   | S.NewExpr (a,e,es) -> NewExpr (a,expr e,map expr es)
   | S.PrefixExpr (a,op,e) -> 
-      PrefixExpr (a, "prefix:" ^ FormatExt.to_string JavaScript.Pretty.p_prefixOp op,expr e)
+      PrefixExpr (a, "prefix:" ^ Format.to_string JavaScript.Pretty.p_prefixOp op,expr e)
   | S.UnaryAssignExpr (a, op, lv) ->
       let func (lv, e) = 
         match op with
@@ -276,18 +276,18 @@ let from_javascript_expr = expr
 
 let rec locals expr = match expr with
   | ConstExpr _ -> IdSet.empty
-  | ArrayExpr (_, es) -> IdSetExt.unions (map locals es)
-  | ObjectExpr (_, ps) -> IdSetExt.unions (map (fun (_, _, e) -> locals e) ps)
+  | ArrayExpr (_, es) -> IdSet.unions (map locals es)
+  | ObjectExpr (_, ps) -> IdSet.unions (map (fun (_, _, e) -> locals e) ps)
   | ThisExpr _ -> IdSet.empty
   | VarExpr _ -> IdSet.empty
   | IdExpr _ -> IdSet.empty
   | BracketExpr (_, e1, e2) -> IdSet.union (locals e1) (locals e2)
-  | NewExpr (_, c, args) -> IdSetExt.unions (map locals (c :: args))
+  | NewExpr (_, c, args) -> IdSet.unions (map locals (c :: args))
   | PrefixExpr (_, _, e) -> locals e
   | InfixExpr (_, _, e1, e2) -> IdSet.union (locals e1) (locals e2)
-  | IfExpr (_, e1, e2, e3) -> IdSetExt.unions (map locals [e1; e2; e3])
+  | IfExpr (_, e1, e2, e3) -> IdSet.unions (map locals [e1; e2; e3])
   | AssignExpr (_, l, e) -> IdSet.union (lv_locals l) (locals e)
-  | AppExpr (_, f, args) -> IdSetExt.unions (map locals (f :: args))
+  | AppExpr (_, f, args) -> IdSet.unions (map locals (f :: args))
   | FuncExpr _ -> IdSet.empty
   | LetExpr (_, _, e1, e2) -> 
       (* We are computing properties of the local scope object, not identifers

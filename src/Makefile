@@ -17,4 +17,4 @@ builddir:
 	@mkdir $(BUILDDIR) 2> /dev/null || true
 
 install: lib
-	cd $(BUILDDIR) && ocamlfind install ES5 ../src/META ES5.cma ES5.cmxa ES5.a es5_*.cmi exprjs_syntax.cmi *Ext.cmi javaScript*.cmi prelude.cmi
+	cd $(BUILDDIR) && ocamlfind install ES5 ../src/META ES5.cma ES5.cmxa ES5.a es5_*.cmi exprjs_syntax.cmi javaScript*.cmi prelude.cmi

@@ -8,7 +8,6 @@ val parse_expr : string -> string -> expr
 module Pretty : sig
 
   open Format
-  open FormatExt
 
   val p_const : const -> printer
   val p_expr : expr -> printer

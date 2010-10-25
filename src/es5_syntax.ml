@@ -120,26 +120,26 @@ let rec fv exp : IdSet.t = match exp with
   | EObject (_, attrs, fields) -> 
       let attr (name, value) = fv value in
       let field (name, attrs) = 
-	IdSetExt.unions (map attr attrs) in
-	IdSetExt.unions (List.append (map attr attrs) (map field fields))
+	IdSet.unions (map attr attrs) in
+	IdSet.unions (List.append (map attr attrs) (map field fields))
   | EUpdateField (_, o1, o2, e1, e2, args) -> 
-      IdSetExt.unions (map fv [o1; o2; e1; e2; args])
+      IdSet.unions (map fv [o1; o2; e1; e2; args])
   | EGetField (_, o1, o2, e, args) ->
-      IdSetExt.unions (map fv [o1; o2; e; args])
+      IdSet.unions (map fv [o1; o2; e; args])
   | EUpdateFieldSurface (_, o, e1, e2, args) -> 
-      IdSetExt.unions (map fv [o; e1; e2; args])
+      IdSet.unions (map fv [o; e1; e2; args])
   | EGetFieldSurface (_, o, e, args) ->
-      IdSetExt.unions (map fv [o; e; args])
+      IdSet.unions (map fv [o; e; args])
   | EDeleteField (_, o, e) -> IdSet.union (fv o) (fv e)
   | EAttr (_, _, o, f) ->
-      IdSetExt.unions (map fv [o; f])
+      IdSet.unions (map fv [o; f])
   | ESetAttr (_, _, o, f, v) ->
-      IdSetExt.unions (map fv [o; f; v])
+      IdSet.unions (map fv [o; f; v])
   | EOp1 (_, _, e) -> fv e
   | EOp2 (_, _, e1, e2) -> IdSet.union (fv e1) (fv e2)
-  | EOp3 (_, _, e1, e2, e3) -> IdSetExt.unions (map fv [e1; e2; e3])
-  | EIf (_, e1, e2, e3) -> IdSetExt.unions (map fv [e1; e2; e3])
-  | EApp (_, f, args) -> IdSetExt.unions (map fv (f :: args))
+  | EOp3 (_, _, e1, e2, e3) -> IdSet.unions (map fv [e1; e2; e3])
+  | EIf (_, e1, e2, e3) -> IdSet.unions (map fv [e1; e2; e3])
+  | EApp (_, f, args) -> IdSet.unions (map fv (f :: args))
   | ESeq (_, e1, e2) -> IdSet.union (fv e1) (fv e2)
   | ESet (_, x, e) -> IdSet.union (fv e) (IdSet.singleton x)
   | ELet (_, x, e1, e2) -> IdSet.union (fv e1) (IdSet.remove x (fv e2))
@@ -150,4 +150,4 @@ let rec fv exp : IdSet.t = match exp with
   | ETryCatch (_, e1, e2) -> IdSet.union (fv e1) (fv e2)
   | ETryFinally (_, e1, e2) -> IdSet.union (fv e1) (fv e2)
   | EThrow (_, e) ->  fv e
-  | ELambda (_, args, body) -> IdSet.diff (fv body) (IdSetExt.from_list args)
+  | ELambda (_, args, body) -> IdSet.diff (fv body) (IdSet.from_list args)

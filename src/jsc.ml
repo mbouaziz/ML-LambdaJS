@@ -6,7 +6,6 @@ open Format
 open Lambdajs_cps
 open Exprjs_syntax
 open Format
-open FormatExt
 open Lambdajs_lattice
 open Lambdajs_env
 open Lambdajs_syntax
@@ -117,7 +116,7 @@ let action_eval () : unit =
 
 let action_operators () : unit =
   let ops = operators !srcLJS in
-    IdSetExt.p_set text ops std_formatter;
+    IdSet.p_set text ops std_formatter;
     print_newline ()
       
 let action = ref (fun () -> ())

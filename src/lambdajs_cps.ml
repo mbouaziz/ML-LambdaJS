@@ -262,7 +262,6 @@ let cpsexp_idx (cpsexp : cpsexp) = match cpsexp with
 module Pretty = struct
 
   open Format
-  open FormatExt
 
   let rec p_cpsval (cpsval : cpsval) : printer = match cpsval with
       Const c -> JavaScript.Pretty.p_const c
@@ -324,12 +323,12 @@ let cps (exp : exp) : cpsexp =
 
 let rec fv (cpsexp : cpsexp) : IdSet.t = match cpsexp with
   |  Fix (_, binds, body) ->
-       let bound_ids = IdSetExt.from_list (map fst3 binds) in
-         IdSet.diff (IdSetExt.unions (fv body :: map fv_bind binds))
+       let bound_ids = IdSet.from_list (map fst3 binds) in
+         IdSet.diff (IdSet.unions (fv body :: map fv_bind binds))
          bound_ids
-  | App (_, v, vs) -> IdSetExt.unions (map fv_val (v :: vs))
+  | App (_, v, vs) -> IdSet.unions (map fv_val (v :: vs))
   | If (_, v1, e2, e3) ->
-      IdSetExt.unions [ fv_val v1; fv e2; fv e3 ]
+      IdSet.unions [ fv_val v1; fv e2; fv e3 ]
   | Bind (_, x, b, e) -> 
       IdSet.union (fv_bindexp b)
         (IdSet.remove x (fv e))
@@ -342,15 +341,15 @@ and fv_bindexp (bindexp : bindexp) = match bindexp with
   | Let v -> fv_val v
   | Op1 (_, v) -> fv_val v
   | Op2 (_, v1, v2) -> IdSet.union (fv_val v1) (fv_val v2)
-  | Object ps -> IdSetExt.unions (map (fun (_, v) -> fv_val v) ps)
+  | Object ps -> IdSet.unions (map (fun (_, v) -> fv_val v) ps)
   | UpdateField (v1, v2, v3) -> 
       IdSet.union (fv_val v1) (IdSet.union (fv_val v2) (fv_val v3))
 
 and fv_bind (_, args, body) =
-  IdSet.diff (fv body) (IdSetExt.from_list args)
+  IdSet.diff (fv body) (IdSet.from_list args)
 
 let fv_immediate (cpsexp : cpsexp) : IdSet.t = match cpsexp with
   |  Fix (_, binds, body) -> IdSet.empty
-  | App (_, v, vs) -> IdSetExt.unions (map fv_val (v :: vs))
+  | App (_, v, vs) -> IdSet.unions (map fv_val (v :: vs))
   | If (_, v1, e2, e3) -> fv_val v1
   | Bind (_, x, b, e) -> fv_bindexp b
