@@ -22,13 +22,6 @@ let rec exp e = match e with
 		 [text "get-field";
 		 exp o;
 		 exp f;])
-  | EUpdateField (p, o1, o2, f, v, args) ->
-      parens (horz 
-		 [text "update-field";
-		 exp o1;
-		 exp o2;
-		 exp f;
-		 exp v])
   | EGetField (p, o1, o2, f, args) ->
       parens (horz 
 		 [text "get-field";
