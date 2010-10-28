@@ -41,7 +41,6 @@ type ('op1, 'op2, 'op3) exp =
   | EGetFieldSurface of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
   | EAttr of pos * attr * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
   | ESetAttr of pos * attr * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
-  | EGetField of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
   | EDeleteField of pos * ('op1, 'op2, 'op3) exp * ('op1, 'op2, 'op3) exp
   | ESet of pos * id * ('op1, 'op2, 'op3) exp
   | EOp1 of pos * 'op1 * ('op1, 'op2, 'op3) exp
@@ -79,8 +78,6 @@ let rename (x : id) (y : id) exp =
 	EUpdateFieldSurface (p, ren o, ren e1, ren e2, ren args)
     | EGetFieldSurface (p, o, e, args) ->
 	EGetFieldSurface (p, ren o, ren e, ren args)
-    | EGetField (p, o1, o2, e, args) ->
-	EGetField (p, ren o1, ren o2, ren e, ren args)
     | EDeleteField (p, o, e) ->
 	EDeleteField (p, ren o, ren e)
     | EAttr (p, a, o, f) ->
@@ -119,8 +116,6 @@ let rec fv exp : IdSet.t = match exp with
       let field (name, attrs) = 
 	IdSet.unions (map attr attrs) in
 	IdSet.unions (List.append (map attr attrs) (map field fields))
-  | EGetField (_, o1, o2, e, args) ->
-      IdSet.unions (map fv [o1; o2; e; args])
   | EUpdateFieldSurface (_, o, e1, e2, args) -> 
       IdSet.unions (map fv [o; e1; e2; args])
   | EGetFieldSurface (_, o, e, args) ->

@@ -22,12 +22,6 @@ let rec exp e = match e with
 		 [text "get-field";
 		 exp o;
 		 exp f;])
-  | EGetField (p, o1, o2, f, args) ->
-      parens (horz 
-		 [text "get-field";
-		 exp o1;
-		 exp o2;
-		 exp f;])
   | EDeleteField (p, o1, f) ->
       parens (horz
 		 [text "delete-field";

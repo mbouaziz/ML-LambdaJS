@@ -334,8 +334,6 @@ let rec ds_op (exp : src_exp) : prim_exp = match exp with
       let ds_op_attr (name, value) = (name, ds_op value) in
       let ds_op_field (name, attrs) = (name, map ds_op_attr attrs) in
 	EObject (p, map ds_op_attr internals, map ds_op_field fields)
-  | EGetField (p, o1, o2, f, args) -> 
-      EGetField (p, ds_op o1, ds_op o2, ds_op f, ds_op args)
   | EUpdateFieldSurface (p, o, f, v, args) -> 
       EUpdateFieldSurface (p, ds_op o, ds_op f, ds_op v, ds_op args)
   | EGetFieldSurface (p, o, f, args) -> 
@@ -436,8 +434,6 @@ let rec ds_global exp env = match exp with
 			   ds_global args env)
   | EGetFieldSurface (p, o, f, args) ->
       EGetFieldSurface (p, ds_global o env, ds_global f env, ds_global args env)
-  | EGetField (p, o1, o2, f, args) ->
-      EGetField (p, ds_global o1 env, ds_global o2 env, ds_global f env, ds_global args env)
   | EDeleteField (p, o, f) ->
       EDeleteField (p, ds_global o env, ds_global f env)
   | EAttr (p, a, o, f) ->
@@ -477,7 +473,6 @@ let rec check_op (exp : src_exp) : prim_exp = match exp with
       let check_op_attr (name, value) = (name, check_op value) in
       let check_op_field (name, attrs) = (name, map check_op_attr attrs) in
 	EObject (p, map check_op_attr internals, map check_op_field fields)
-  | EGetField (p, o1, o2, f, args) -> EGetField (p, check_op o1, check_op o2, check_op f, check_op args)
   | EUpdateFieldSurface (p, o, f, v, args) -> EUpdateFieldSurface (p, check_op o, check_op f, check_op v, check_op args)
   | EGetFieldSurface (p, o, f, args) -> EGetFieldSurface (p, check_op o, check_op f, check_op args)
   | EDeleteField (p, o, f) -> EDeleteField (p, check_op o, check_op f)

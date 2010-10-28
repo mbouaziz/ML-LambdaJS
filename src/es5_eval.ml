@@ -371,7 +371,6 @@ let rec eval (exp : prim_exp) env = match exp with
 		       arity_mismatch_err p xs args
 		     else
 		     eval e (List.fold_right2 set_arg args xs env))
-  | EGetField (_,_,_,_,_) -> failwith ("Use EGetFieldSurface")
 
 and arity_mismatch_err p xs args = failwith ("Arity mismatch, supplied " ^ string_of_int (List.length args) ^ " arguments and expected " ^ string_of_int (List.length xs) ^ " at " ^ string_of_position p ^ ". Arg names were: " ^ (List.fold_right (^) (map (fun s -> " " ^ s ^ " ") xs) "") ^ ". Values were: " ^ (List.fold_right (^) (map (fun v -> " " ^ pretty_value v ^ " ") args) ""))
 
