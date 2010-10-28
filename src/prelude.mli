@@ -61,6 +61,7 @@ sig
   sig
     include Map.S
 
+    val add_opt : key -> 'a option -> 'a t -> 'a t
     val find_opt : key -> 'a t -> 'a option
     val mem_binding : key -> 'a -> 'a t -> bool
     val from_list : (key * 'a) list -> 'a t

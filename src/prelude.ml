@@ -132,6 +132,7 @@ struct
   sig
     include Map.S
 
+    val add_opt : key -> 'a option -> 'a t -> 'a t
     val find_opt : key -> 'a t -> 'a option
     val mem_binding : key -> 'a -> 'a t -> bool
     val from_list : (key * 'a) list -> 'a t
@@ -147,6 +148,10 @@ struct
   module Make (Ord : OrderedType) : S with type key = Ord.t =
   struct
     include Map.Make(Ord)
+
+    let add_opt k = function
+    | Some v -> add k v
+    | None -> fun m -> m
 
     let find_opt k m = try Some (find k m) with Not_found -> None
 
