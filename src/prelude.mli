@@ -18,7 +18,7 @@ end
 
 module Format :
 sig
-  include FormatSig.S
+  include module type of Format
 
   type printer = formatter -> unit
   val nest : printer -> printer
