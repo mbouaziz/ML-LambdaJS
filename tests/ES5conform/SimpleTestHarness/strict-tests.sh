@@ -14,7 +14,7 @@ function failure {
 for FILE in `find ../TestCases/ -type f -name "*.js"`
 do
     numTests=$((numTests+1))
-    $P/ljs-test-single.sh $FILE || failure
+    $P/ljs-test-single.sh $FILE $1 || failure
 done
 
 echo "$numTests tried.  $failures failed."
