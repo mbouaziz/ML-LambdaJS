@@ -66,6 +66,42 @@ type prim_exp = ([ `Prim1 of string], [ `Prim2 of string], [ `Prim3 of string]) 
 
 (******************************************************************************)
 
+let substitute : 'a 'b 'c. id -> ('a, 'b, 'c) exp -> ('a, 'b, 'c) exp -> ('a, 'b, 'c) exp = fun x y exp ->
+  let rec subs exp = match exp with
+    | EConst _ -> exp
+    | EId (_, z) when z = x -> y
+    | EId _ -> exp
+    | EObject (p, attrs, fields) ->
+	let subs_attr (name, value) = (name, subs value) in
+	let subs_field (name, attrs) = (name, map subs_attr attrs) in
+	  EObject (p, map subs_attr attrs, map subs_field fields)
+    | EUpdateFieldSurface (p, o, e1, e2, args) -> EUpdateFieldSurface (p, subs o, subs e1, subs e2, subs args)
+    | EGetFieldSurface (p, o, e, args) -> EGetFieldSurface (p, subs o, subs e, subs args)
+    | EDeleteField (p, o, e) ->	EDeleteField (p, subs o, subs e)
+    | EAttr (p, a, o, f) -> EAttr (p, a, subs o, subs f)
+    | ESetAttr (p, a, o, f, v) -> ESetAttr (p, a, subs o, subs f, subs v)
+    | EOp1 (p, o, e) -> EOp1 (p, o, subs e)
+    | EOp2 (p, o, e1, e2) -> EOp2 (p, o, subs e1, subs e2)
+    | EOp3 (p, o, e1, e2, e3) -> EOp3 (p, o, subs e1, subs e2, subs e3)
+    | EIf (p, e1, e2, e3) -> EIf (p, subs e1, subs e2, subs e3)
+    | EApp (p, f, args) -> EApp (p, subs f, map subs args)
+    | ESeq (p, e1, e2) -> ESeq (p, subs e1, subs e2)
+    | ESet (_, z, _) when z = x -> failwith "subs"
+    | ESet (p, z, e) -> ESet (p, z, subs e)
+    | ELet (_, z, _, _) when z = x -> failwith "subs"
+    | ELet (p, z, e1, e2) -> ELet (p, z, subs e1, subs e2)
+    | EFix (_, z, _) when z = x -> failwith "subs"
+    | EFix (p, z, body) -> EFix (p, z, subs body)
+    | ELabel (p, l, e) -> ELabel (p, l, subs e)
+    | EBreak (p, l, e) -> EBreak (p, l, subs e)
+    | ETryCatch (p, e1, e2) -> ETryCatch (p, subs e1, subs e2)
+    | ETryFinally (p, e1, e2) -> ETryFinally (p, subs e1, subs e2)
+    | EThrow (p, e) -> EThrow (p, subs e)
+    | ELambda (_, args, _) when List.mem x args -> failwith "subs"
+    | ELambda (p, args, body) -> ELambda (p, args, subs body)
+  in subs exp
+
+
 let rename (x : id) (y : id) exp =
   let rec ren exp = match exp with
     | EConst _ -> exp

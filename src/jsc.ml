@@ -24,19 +24,27 @@ module H = Hashtbl
 
 let p = (Lexing.dummy_pos, Lexing.dummy_pos)
 
-type exptype = SrcExp of ES5s.src_exp | PrimExp of ES5s.prim_exp
+let env_special_id = "**ENV-SPECIAL-ID**"
+
+type exptype =
+  | Nothing
+  | PrimEnv of ES5s.prim_exp
+  | SrcExp of ES5s.src_exp
+  | PrimExp of ES5s.prim_exp
 
 let prim_to_src (e : ES5s.prim_exp) : ES5s.src_exp = (e :> ES5s.src_exp)
 
 let primexp = function
   | SrcExp e -> ES5ds.check_op e
   | PrimExp e -> e
+  | _ -> assert false
 let srcexp = function
   | SrcExp e -> e
   | PrimExp e -> prim_to_src e
+  | _ -> assert false
 
 let srcLJS = ref (EConst (p, JavaScript_syntax.CUndefined))
-let srcES5 = ref (PrimExp (ES5s.EConst (p, JavaScript_syntax.CUndefined)))
+let srcES5 = ref Nothing
 let lang = ref "es5"
 
 let action_set_lang (lang_in : string) : unit = 
@@ -57,9 +65,13 @@ let load_js (path : string) : unit =
 	    ESeq (p, !srcLJS,
 		  Lambdajs_syntax.desugar (Exprjs_syntax.from_javascript js))
       | "es5" ->
-	  srcES5 :=
-	    SrcExp (ES5s.ESeq (p, srcexp !srcES5,
-			       ES5ds.ds_top (Exprjs_syntax.from_javascript js)))
+	  let newES5 = ES5ds.ds_top (Exprjs_syntax.from_javascript js) in
+	  srcES5 := begin match !srcES5 with
+	  | Nothing -> SrcExp newES5
+	  | PrimEnv _ -> failwith "Env applied to nothing followed by a JS file"
+	  | SrcExp e -> SrcExp (ES5s.ESeq (p, e, newES5))
+	  | PrimExp e -> SrcExp (ES5s.ESeq (p, prim_to_src e, newES5))
+	  end
       | _ -> failwith ("Unknown language: " ^ !lang)
 
 let load_lambdajs (path : string) : unit =
@@ -69,6 +81,8 @@ let load_lambdajs (path : string) : unit =
 let load_es5 (path : string) : unit =
   let parsed = ES5.parse_es5 (xopen_in path) path in
   srcES5 := match !srcES5 with
+  | Nothing -> PrimExp parsed
+  | PrimEnv _ -> failwith "Env applied to nothing followed by an ES5 file"
   | SrcExp e -> SrcExp (ES5s.ESeq (p, e, prim_to_src parsed))
   | PrimExp e -> PrimExp (ES5s.ESeq (p, e, parsed))
 
@@ -85,18 +99,53 @@ let load_file (path : string) : unit =
 let desugar () : unit =
   match !lang with
     | "ljs" -> srcLJS := Lambdajs_desugar.desugar_op !srcLJS
-    | "es5" -> srcES5 := PrimExp (ES5ds.desugar (srcexp !srcES5))
+    | "es5" -> srcES5 := begin match !srcES5 with
+      | Nothing -> failwith "Nothing to desugar"
+      | PrimEnv e -> PrimEnv (ES5ds.desugar (prim_to_src e))
+      | SrcExp e -> PrimExp (ES5ds.desugar e)
+      | PrimExp e -> PrimExp (ES5ds.desugar (prim_to_src e))
+      end
     | _ -> failwith ("Unknown language: " ^ !lang)
+
+let apply_env env x = match x with
+  | Nothing -> PrimEnv env
+  | PrimEnv env0 -> PrimEnv (ES5s.substitute env_special_id env0 env)
+  | SrcExp e -> SrcExp (ES5s.substitute env_special_id e (prim_to_src env))
+  | PrimExp e -> PrimExp (ES5s.substitute env_special_id e env)
 
 let set_env (s : string) =
   match !lang with
     | "ljs" -> srcLJS := enclose_in_env (parse_env (xopen_in s) s) !srcLJS
-    | "es5" -> let parsed x = ES5e.parse_env (xopen_in s) s x in
-      srcES5 := begin match !srcES5 with
-      | PrimExp e -> PrimExp (ES5e.enclose_in_env parsed e)
-      | SrcExp e -> SrcExp (ES5e.enclose_in_env parsed e)
-      end
+    | "es5" -> srcES5 := apply_env (ES5e.parse_env (xopen_in s) s (ES5s.EId (p, env_special_id))) !srcES5
     | _ -> failwith ("Unknown language: " ^ !lang)
+
+let read_env_from_cache_file (s : string) =
+  match !lang with
+  | "ljs" -> failwith ("Read env from cache not implemented for " ^ !lang)
+  | "es5" ->
+      let cin = open_in_bin s in
+      let cached = Marshal.from_channel cin in
+      let _ = close_in cin in
+      srcES5 := begin match !srcES5, cached with
+      | _, Nothing -> failwith ("Nothing in file " ^ s)
+      | Nothing, _ -> cached
+      | x, PrimEnv env -> apply_env env x
+      | SrcExp e1, SrcExp e2 -> SrcExp (ES5s.ESeq (p, e1, e2))
+      | SrcExp e1, PrimExp e2 -> SrcExp (ES5s.ESeq (p, e1, prim_to_src e2))
+      | PrimExp e1, SrcExp e2 -> SrcExp (ES5s.ESeq (p, prim_to_src e1, e2))
+      | PrimExp e1, PrimExp e2 -> PrimExp (ES5s.ESeq (p, e1, e2))
+      | PrimEnv _, _ -> failwith "Unapplied environment followed by code"
+      end
+  | _ -> failwith ("Unknown language: " ^ !lang)
+
+let write_env_to_cache_file (s : string) =
+  match !lang with
+  | "ljs" -> failwith ("Writing env to cache not implemented for " ^ !lang)
+  | "es5" ->
+      let cout = open_out_bin s in
+      Marshal.to_channel cout !srcES5 [Marshal.Closures];
+      close_out cout
+  | _ -> failwith ("Unknown language: " ^ !lang)
 
 let action_pretty () : unit =
   match !lang with
@@ -140,6 +189,12 @@ all languages");
 
       ("-env", Arg.String set_env,
       "<file> load <file> as environment");
+
+      ("-env-rc", Arg.String read_env_from_cache_file,
+       "<file> load <file> as a cached environment");
+
+      ("-env-wc", Arg.String write_env_to_cache_file,
+       "<file> write <file> as a cached environment");
 
       ("-full-desugar", Arg.Unit (set_action desugar), "like it says");
 
