@@ -1,6 +1,6 @@
 jsc: 
-	cd src/ && make clean jsc
+	cd src/ && make jsc
+clean:
+	cd src/ && make clean
 test: 
 	cd tests/ES5conform/SimpleTestHarness/ && ./strict-tests.sh
-test-ex:
-	cd tests/ES5conform/SimpleTestHarness/ && ./strict-tests.sh -full-output
