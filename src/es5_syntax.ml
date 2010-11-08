@@ -66,10 +66,9 @@ type prim_exp = ([ `Prim1 of string], [ `Prim2 of string], [ `Prim3 of string]) 
 
 (******************************************************************************)
 
-let substitute : 'a 'b 'c. id -> ('a, 'b, 'c) exp -> ('a, 'b, 'c) exp -> ('a, 'b, 'c) exp = fun x y exp ->
-  let rec subs exp = match exp with
+let substitute : 'a 'b 'c. ('a, 'b, 'c) exp -> ('a, 'b, 'c) exp -> ('a, 'b, 'c) exp -> ('a, 'b, 'c) exp = fun x y exp ->
+  let rec subs exp = if exp = x then y else match exp with
     | EConst _ -> exp
-    | EId (_, z) when z = x -> y
     | EId _ -> exp
     | EObject (p, attrs, fields) ->
 	let subs_attr (name, value) = (name, subs value) in
@@ -86,18 +85,14 @@ let substitute : 'a 'b 'c. id -> ('a, 'b, 'c) exp -> ('a, 'b, 'c) exp -> ('a, 'b
     | EIf (p, e1, e2, e3) -> EIf (p, subs e1, subs e2, subs e3)
     | EApp (p, f, args) -> EApp (p, subs f, map subs args)
     | ESeq (p, e1, e2) -> ESeq (p, subs e1, subs e2)
-    | ESet (_, z, _) when z = x -> failwith "subs"
     | ESet (p, z, e) -> ESet (p, z, subs e)
-    | ELet (_, z, _, _) when z = x -> failwith "subs"
     | ELet (p, z, e1, e2) -> ELet (p, z, subs e1, subs e2)
-    | EFix (_, z, _) when z = x -> failwith "subs"
     | EFix (p, z, body) -> EFix (p, z, subs body)
     | ELabel (p, l, e) -> ELabel (p, l, subs e)
     | EBreak (p, l, e) -> EBreak (p, l, subs e)
     | ETryCatch (p, e1, e2) -> ETryCatch (p, subs e1, subs e2)
     | ETryFinally (p, e1, e2) -> ETryFinally (p, subs e1, subs e2)
     | EThrow (p, e) -> EThrow (p, subs e)
-    | ELambda (_, args, _) when List.mem x args -> failwith "subs"
     | ELambda (p, args, body) -> ELambda (p, args, subs body)
   in subs exp
 

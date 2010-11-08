@@ -25,6 +25,7 @@ module H = Hashtbl
 let p = (Lexing.dummy_pos, Lexing.dummy_pos)
 
 let env_special_id = "**ENV-SPECIAL-ID**"
+let env_special_node = ES5s.EOp1(p, `Prim1 env_special_id, ES5s.EConst (p, JavaScript_syntax.CUndefined))
 
 type exptype =
   | Nothing
@@ -109,14 +110,14 @@ let desugar () : unit =
 
 let apply_env env x = match x with
   | Nothing -> PrimEnv env
-  | PrimEnv env0 -> PrimEnv (ES5s.substitute env_special_id env0 env)
-  | SrcExp e -> SrcExp (ES5s.substitute env_special_id e (prim_to_src env))
-  | PrimExp e -> PrimExp (ES5s.substitute env_special_id e env)
+  | PrimEnv env0 -> PrimEnv (ES5s.substitute env_special_node env0 env)
+  | SrcExp e -> SrcExp (ES5s.substitute env_special_node e (prim_to_src env))
+  | PrimExp e -> PrimExp (ES5s.substitute env_special_node e env)
 
 let set_env (s : string) =
   match !lang with
     | "ljs" -> srcLJS := enclose_in_env (parse_env (xopen_in s) s) !srcLJS
-    | "es5" -> srcES5 := apply_env (ES5e.parse_env (xopen_in s) s (ES5s.EId (p, env_special_id))) !srcES5
+    | "es5" -> srcES5 := apply_env (ES5e.parse_env (xopen_in s) s env_special_node) !srcES5
     | _ -> failwith ("Unknown language: " ^ !lang)
 
 let read_env_from_cache_file (s : string) =
