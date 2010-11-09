@@ -6,7 +6,7 @@ F=`basename $FILE`
 output=`mktemp -t ljses5.XXXXX`
 errOutput=`mktemp -t ljses5err.XXXXX`
 
-$P/../../../build/jsc.native $P/ljs_harness.js $FILE $P/ljs-run.js -env $P/../../../data/es5-lib.es5 -full-desugar -eval > $output 2> $errOutput
+$P/../../../build/jsc.native $P/ljs_harness.js $FILE $P/ljs-run.js -full-desugar -env-rc $P/../../../data/es5-lib.cache  -eval > $output 2> $errOutput
 
 failed1=`grep Failed $output`
 failed2=`grep failed $output`
