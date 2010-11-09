@@ -17,7 +17,8 @@ fails=0
 
 function run_test {
   tests=`expr $tests + 1`
-  $P/build/jsc.d.byte -full-desugar -env $P/data/ecma262-3.lambdajs $1 \
+  echo "Test $tests: $1"
+  $P/jsc.native $1 -env $P/data/es5-lib.es5 -full-desugar \
     || fails=`expr $fails + 1`
 }
 

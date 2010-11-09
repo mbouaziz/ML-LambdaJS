@@ -4,5 +4,5 @@ P=`dirname $0`
 
 for FILE in $P/*.js
 do
-  $P/../../build/jsc.d.byte $FILE
+  $P/../../jsc.native $FILE
 done
