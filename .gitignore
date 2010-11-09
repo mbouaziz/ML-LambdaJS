@@ -1,5 +1,7 @@
-build
+_build
+*.native
 .DS_Store
 *.conflicts
 TAGS
 *~*
+data/es5-lib.cache
