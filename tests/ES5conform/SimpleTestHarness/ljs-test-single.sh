@@ -8,8 +8,8 @@ errOutput=`mktemp -t ljses5err.XXXXX`
 
 $P/../../../build/jsc.native $P/ljs_harness.js $FILE $P/ljs-run.js -full-desugar -env-rc $P/../../../data/es5-lib.cache  -eval > $output 2> $errOutput
 
-failed1=`grep Failed $output`
-failed2=`grep failed $output`
+failed1=`grep Fail $output`
+failed2=`grep fail $output`
 failed3=`grep exception $errOutput`
 failed="$failed1$failed2$failed3"
 
