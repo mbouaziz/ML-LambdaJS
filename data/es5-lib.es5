@@ -360,7 +360,7 @@ let [[Object]] =
 	      #configurable: false,
 	      #enumerable: false}}
 
-let [[eval]] = function(s) { return throw "We do not account for eval." }
+let [[eval]] = function(s) { return prim("eval", ToString(s)) }
 
 let [[global]] = { [proto: null, class: "Lambda-JS global", extensible: true]
 		   "NaN": {#value: NaN,
