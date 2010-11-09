@@ -3,15 +3,10 @@
 P=`dirname $0`
 FILE=$1
 F=`basename $FILE`
-output=`mktemp -t ljses5.XXXXX`
-errOutput=`mktemp -t ljses5err.XXXXX`
+output=`mktemp -t jsc.$F.XXX`
+failed="1"
 
-$P/../../../build/jsc.native $P/ljs_harness.js $FILE $P/ljs-run.js -full-desugar -env-rc $P/../../../data/es5-lib.cache  -eval > $output 2> $errOutput
-
-failed1=`grep Fail $output`
-failed2=`grep fail $output`
-failed3=`grep exception $errOutput`
-failed="$failed1$failed2$failed3"
+$P/../../../jsc.native $P/ljs_harness.js $FILE $P/ljs-run.js -full-desugar -env-rc $P/../../../data/es5-lib.cache -eval 2>&1 > $output && failed=`grep -i "\(fail\|exception\)" $output`
 
 if [[ $failed != "" ]]; 
 then

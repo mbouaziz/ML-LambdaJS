@@ -9,8 +9,8 @@ failedFile="../jsx-failed"
 passedFile="../jsx-passed"
 failedLjsFile="../failed"
 passedLjsFile="../passed"
-tempFailedFile=`mktemp -t jsx.failed.XXXXX`
-tempPassedFile=`mktemp -t jsx.passed.XXXXX`
+tempFailedFile=`mktemp -t jsx_failed.XXX`
+tempPassedFile=`mktemp -t jsx_passed.XXX`
 failedString="\e[0;31mFAILED\e[0m"
 passedString="\e[0;32mPASSED\e[0m"
 unknownString="\e[0mUNKNOWN\e[0m"
@@ -67,23 +67,24 @@ function testResult {
     was $file
     w=$?
     wasLjs $file
-    if [[ $retcode == 1 ]] 
+    if [[ $retcode == 0 ]]
     then
+	#the test has succeeded
+	echo "$file" >> $tempPassedFile
+	if [[ $w != 2 ]]; then
+	    newPassed=$((newPassed+1))
+	fi
+	isString=$passedString
+    else
 	#the test has failed
 	echo "$file" >> $tempFailedFile 
         failures=$((failures+1))
 	if [[ $w != 0 ]]; then
 	    newFailed=$((newFailed+1))
 	fi
-	echo -e "$numTests. $file [$failedString] [was $wasBefore] [ljs is $wasLjsBefore]"
-    else
-	#the test has succeeded
-	echo "$file" >> $tempPassedFile 
-	if [[ $w != 2 ]]; then
-	    newPassed=$((newPassed+1))
-	fi
-	echo -e "$numTests. $file [$passedString] [was $wasBefore] [ljs was $wasLjsBefore]"
+	isString=$failedString
     fi
+    echo -e "$numTests. $file [$isString] [was $wasBefore] [ljs is $wasLjsBefore]"
 }
 
 for FILE in `find ../TestCases/ -type f -name "*.js"`
