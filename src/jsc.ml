@@ -62,7 +62,7 @@ let load_file (path : string) : unit =
   else if Filename.check_suffix path ".es5" then
     load_es5 path
   else 
-    failwith "unknown file extention; try -js or -ljs"
+    failwith (sprintf "Unknown file extention for file \"%s\"; try -js or -ljs" path)
 
 
 let desugar () : unit =
@@ -153,10 +153,8 @@ let main () : unit =
 
 let _ =
   Printexc.record_backtrace true;
-  let _ = try main (); !action () with
+  try main (); !action () with
     e ->
       print_endline (Printexc.to_string e);
-      Printexc.print_backtrace stdout
-  in
-  Format.pp_print_flush Format.std_formatter ();
-  Format.pp_print_flush Format.err_formatter ()
+      Printexc.print_backtrace stdout;
+      exit 1
