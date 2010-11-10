@@ -18,8 +18,9 @@ let num_c p d =
 let int_c p d =
   EConst (p, S.CInt (d))
 
-let obj_proto p = EId (p, "[[Object_prototype]]")
-let fun_proto p = EId (p, "[[Function_prototype]]")
+ (* WHY is are there a difference here? *)
+let obj_proto ?(from_parser=false) p = EId (p, if from_parser then "Object_prototype" else "[[Object_prototype]]")
+let fun_proto ?(from_parser=false) p = EId (p, if from_parser then "Function_prototype" else "[[Function_prototype]]")
 
 let to_object p e = EApp (p, EId (p, "[[ToObject]]"), [e])
 let to_string p e = EApp (p, EId (p, "[[ToString]]"), [e])
@@ -44,12 +45,12 @@ let mk_array (p, exps) =
 		List.map2 mk_num_field (iota (List.length exps)) exps))
 
 (* 10.6 *)
-let args_obj p arg_list = 
+let args_obj ?(from_parser=false) p arg_list = 
   let mk_field n v = (string_of_int n, 
 		      mk_val p v) in
     EObject 
       (* 10.6 steps 4, 6 *)
-      (p, [("proto", obj_proto p);
+      (p, [("proto", obj_proto ~from_parser p);
 	   ("class", str p "Arguments");
 	   ("extensible", false_c p)],
        (* 10.6 steps 1, 7 *)
@@ -75,20 +76,20 @@ let args_obj p arg_list =
 
 (* Used by getters and setters---the function will be known at
 runtime *)
-let args_thunk p arg_list = 
+let args_thunk ?(from_parser=false) p arg_list = 
   ELambda (p, ["func"],
-	   args_obj p arg_list)
+	   args_obj ~from_parser p arg_list)
 
 
 (* Same idea as in original \JS --- use the args array *)
-let func_expr_lambda p ids body =
+let func_expr_lambda ?(from_parser=false) p ids body =
   let folder id ix e = 
     ELet (p, 
 	  id,
 	  EGetFieldSurface (p, 
 			    EId (p, "arguments"),
 			    EConst (p, S.CString (string_of_int ix)),
-			    args_thunk p []),
+			    args_thunk ~from_parser p []),
 	  e) in
     ELambda (p, 
 	     ["this"; "arguments"],
@@ -106,10 +107,10 @@ let func_stmt_lambda p func_name ids body = func_expr_lambda p ids body
 	func_expr_lambda p ids body) *)
     
 (* 13.2 *)
-let func_object p ids lambda_exp =
+let func_object ?(from_parser=false) p ids lambda_exp =
   ELet (p, "$prototype", 
 	EObject (p,
-		 [("proto", obj_proto p);
+		 [("proto", obj_proto ~from_parser p);
 		  ("extensible", true_c p);
 		  ("class", str p "Object")],
 		 [("constructor", 
@@ -120,7 +121,7 @@ let func_object p ids lambda_exp =
 	ELet (p, "$funobj", 
 	      EObject (p,
 		       [("code", lambda_exp);
-			("proto", fun_proto p);
+			("proto", fun_proto ~from_parser p);
 			("extensible", true_c p);
 			("class", str p "Function")],
 		       [("length", 
@@ -139,8 +140,9 @@ let func_object p ids lambda_exp =
 					    EId (p, "$prototype"),
 					    EConst (p, S.CString ("constructor")),
 					    EId (p, "$funobj"),
-					    args_thunk p [EId (p, "$funobj")]),
+					    args_thunk ~from_parser p [EId (p, "$funobj")]),
 		    EId (p, "$funobj"))))
+
 let new_obj p proto_id = 
   EObject (p,
 	   [("proto", EId (p, proto_id));

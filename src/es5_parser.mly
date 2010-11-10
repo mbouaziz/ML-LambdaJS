@@ -11,97 +11,10 @@ let rename_env exp =
 
 (* Macros for expanding arguments objects and function objects (a
 little bit of desugaring)*)
-
-let rec mk_val p v =
-  [(Value, v);
-   (Enum, true_c p);
-   (Config, true_c p);
-   (Writable, true_c p)]
-
-let rec mk_field (p, s, e) =
-  (p, s, mk_val p e)
     
-let args_obj p arg_list callee = 
-  let mk_field n v = (string_of_int n, 
-		      mk_val p v) in
-    EObject 
-      (p, [("proto", EId (p, "Object_prototype"));
-	   ("class", str p "Arguments");
-	   ("extensible", false_c p)],
-       (("length", [(Value, int_c p (List.length arg_list));
-		    (Writable, true_c p);
-		    (Enum, false_c p);
-		    (Config, true_c p)])::
-	("callee", [(Getter, 
-		     EId (p, "[[ThrowTypeError]]"));
-		    (Setter, 
-		     EId (p, "[[ThrowTypeError]]"));
-		    (Enum, false_c p);
-		    (Config, false_c p)])::
-	("caller", [(Getter, 
-		     EId (p, "[[ThrowTypeError]]"));
-		    (Setter, 
-		     EId (p, "[[ThrowTypeError]]"));
-		    (Enum, false_c p);
-		    (Config, false_c p)])::
-	  (List.map2 mk_field (iota (List.length arg_list)) arg_list)))
-      
-
-(* Used by getters and setters---the function will be known at
-runtime *)
-let args_thunk p arg_list = 
-  ELambda (p, ["func"],
-	   args_obj p arg_list (EId (p, "func")))
-
-
-let rec func_expr_lambda p ids body =
-  let folder id ix e = 
-    ELet (p, 
-	  id,
-	  EGetFieldSurface (p, 
-			    EId (p, "arguments"), 
-			    EConst (p, S.CString (string_of_int ix)),
-			    args_thunk p []),
-	  e) in
-    ELambda (p, 
-	     ["this"; "arguments"],
-	     List.fold_right2 folder ids (iota (List.length ids)) body)
-
-let rec func_object p ids lambda_exp =
-  ELet (p, "$prototype", 
-	EObject (p,
-		 [("proto", EId (p, "Object_prototype"));
-		  ("extensible", true_c p);
-		  ("class", EConst (p, S.CString ("Object")))],
-		 [("constructor", 
-		   [(Value, EConst (p, S.CUndefined));
-		    (Writable, true_c p);
-		    (Enum, false_c p);
-		    (Config, true_c p)])]),
-	ELet (p, "$funobj", 
-	      EObject (p,
-		       [("code", lambda_exp);
-			("proto", EId (p, "Function_prototype"));
-			("extensible", true_c p);
-			("class", str p "Function")],
-		       [("length", 
-			 [(Value, EConst (p, S.CNum
-					      (float_of_int
-						 (List.length ids))));
-			  (Writable, false_c p);
-			  (Enum, false_c p);
-			  (Config, false_c p)]);
-			("prototype",
-			 [(Value, EId (p, "$prototype")); 
-			  (Writable, true_c p);
-			  (Config, false_c p);
-			  (Enum, false_c p)])]),
-	      ESeq (p, EUpdateFieldSurface (p, 
-					    EId (p, "$prototype"),
-					    EConst (p, S.CString ("constructor")),
-					    EId (p, "$funobj"),
-					    args_thunk p [EId (p, "$funobj")]),
-		    EId (p, "$funobj"))))
+let args_thunk = args_thunk ~from_parser:true
+let func_expr_lambda = func_expr_lambda ~from_parser:true
+let func_object = func_object ~from_parser:true
 
  %}
 
