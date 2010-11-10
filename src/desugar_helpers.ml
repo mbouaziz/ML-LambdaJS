@@ -30,11 +30,11 @@ let rec mk_val p v =
    (Config, true_c p);
    (Writable, true_c p)]
 
-and mk_field (p, s, e) =
+let mk_field (p, s, e) =
   match e with
     | _ -> (s, mk_val p e)
 
-and mk_array (p, exps) = 
+let mk_array (p, exps) = 
   let mk_num_field n v = (string_of_int n, 
 		      mk_val p v) in
     EObject (p, [("proto", EId (p, "[[Array_prototype]]"));
@@ -44,7 +44,7 @@ and mk_array (p, exps) =
 		List.map2 mk_num_field (iota (List.length exps)) exps))
 
 (* 10.6 *)
-and args_obj p arg_list = 
+let args_obj p arg_list = 
   let mk_field n v = (string_of_int n, 
 		      mk_val p v) in
     EObject 
@@ -75,13 +75,13 @@ and args_obj p arg_list =
 
 (* Used by getters and setters---the function will be known at
 runtime *)
-and args_thunk p arg_list = 
+let args_thunk p arg_list = 
   ELambda (p, ["func"],
 	   args_obj p arg_list)
 
 
 (* Same idea as in original \JS --- use the args array *)
-and func_expr_lambda p ids body =
+let func_expr_lambda p ids body =
   let folder id ix e = 
     ELet (p, 
 	  id,
@@ -99,14 +99,14 @@ and func_expr_lambda p ids body =
    not considered the repercussions of functions with the same name as
    an argument. *)
 
-and func_stmt_lambda p func_name ids body = func_expr_lambda p ids body
+let func_stmt_lambda p func_name ids body = func_expr_lambda p ids body
 (*  ELet (p, 
 	func_name, 
 	EId (p, "$funobj"),
 	func_expr_lambda p ids body) *)
     
 (* 13.2 *)
-and func_object p ids lambda_exp =
+let func_object p ids lambda_exp =
   ELet (p, "$prototype", 
 	EObject (p,
 		 [("proto", obj_proto p);
@@ -141,7 +141,7 @@ and func_object p ids lambda_exp =
 					    EId (p, "$funobj"),
 					    args_thunk p [EId (p, "$funobj")]),
 		    EId (p, "$funobj"))))
-and new_obj p proto_id = 
+let new_obj p proto_id = 
   EObject (p,
 	   [("proto", EId (p, proto_id));
 	    ("extensible", true_c p);
