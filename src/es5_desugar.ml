@@ -13,150 +13,166 @@ let mk_id s =
 
 let rec ds expr =
   match expr with
-    | ConstExpr (p,c) -> EConst (p,c)
+    | ConstExpr (p,c) -> { p ; e = EConst c }
 	
     | ArrayExpr (p,expr_list) -> mk_array (p, map ds expr_list)
 
     | ObjectExpr (p, exprs) -> 
         let (binder, obj_fields) = ds_fields exprs in
-	  binder (EObject (p, 
-		           [("proto", obj_proto p);
-		           ("extensible", true_c p);
-		           ("class", str p "Object")],
-		           obj_fields))
+	  binder ({ p ; e = EObject (
+		      [("proto", obj_proto p);
+		       ("extensible", true_c p);
+		       ("class", str p "Object")],
+		      obj_fields) })
 	    
-    | ThisExpr (p) -> EId (p, "this")
+    | ThisExpr (p) -> { p ; e = EId "this" }
 	
-    | VarExpr (p, x) -> EId (p, x)
+    | VarExpr (p, x) -> { p ; e = EId x }
 	
-    | IdExpr (p, x) -> EId (p, x)
+    | IdExpr (p, x) -> { p ; e = EId x }
 
     | BracketExpr (p, obj, f) ->
-	EGetFieldSurface (p, to_object p (ds obj), to_string p (ds f), args_thunk p [])
+	{ p ; e = EGetFieldSurface (to_object p (ds obj), to_string p (ds f), args_thunk p []) }
 	  
     | AssignExpr (p1, VarLValue (p2, x), e) ->
-	ESet (p1, x, ds e)
+	{ p = p1 ; e = ESet (x, ds e) }
 
     | AssignExpr (p1, PropLValue (p2, obj, f), e) ->
-	ELet (p1, 
-	      "$newVal", 
-	      ds e,
-	      ELet (p1, 
-		    "$set-field-result", 
-		    EUpdateFieldSurface (p1, 
-					 to_object p2 (ds obj),
-					 to_string p2 (ds f), 
-					 EId (p1, "$newVal"),
-					 args_thunk p1 [EId (p1, "$newVal")]),
-		    EIf (p1, 
-			 EOp1 (p1, `Prim1 ("fail?"), EId (p1, "$set-field-result")),
-			 EApp (p1, EId (p1, "[[ThrowTypeError]]"), [undef_c p1; str p1 ((string_of_position p1) ^ "unable to set")]),
-			 EId (p1, "$set-field-result"))))
+	{ p = p1 ; e = ELet (
+	    "$newVal",
+	    ds e,
+	    { p = p1 ; e = ELet (
+		"$set-field-result",
+		{ p = p1 ; e = EUpdateFieldSurface (
+		    to_object p2 (ds obj),
+		    to_string p2 (ds f),
+		    { p = p1 ; e = EId "$newVal" },
+		    args_thunk p1 [{ p = p1 ; e = EId "$newVal" }]) },
+		{ p = p1 ; e = EIf (
+		    { p = p1 ; e = EOp1 (`Prim1 ("fail?"), { p = p1 ; e = EId "$set-field-result" }) },
+		    { p = p1 ; e = EApp ({ p = p1 ; e = EId "[[ThrowTypeError]]"}, [undef_c p1; str p1 ((string_of_position p1) ^ "unable to set")]) },
+		    { p = p1 ; e = EId "$set-field-result" }) }) }) }
 
     (* 11.2.2 *)
     | NewExpr (p, e, args) ->
-	ELet (p, "$constructor", ds e,
-	      ELet (p, "$proto", 
-		    EGetFieldSurface (p,
-				      EId (p, "$constructor"),
-				      str p "prototype",
-				      args_thunk p []),
-		    ELet (p,
-			  "$newObj", 
-			  new_obj p "$proto",
-			  ELet (p, 
-				"$resObj", 
-				EApp (p, 
-				      EId (p, "$constructor"),
-				      [EId (p, "$newObj");
-				       args_obj p (map ds args)]),
-				EIf (p, 
-				     EOp2 (p, 
-					   `Prim2 ("stx="),
-					   EOp1 (p, 
-						 `Op1Prefix ("typeof"),
-						 EId (p, "$resObj")),
-					   EConst (p, S.CString ("object"))),
-				     EId (p, "$resObj"),
-				     EId (p, "$newObj"))))))
-	  
-	  
+	{ p ; e = ELet (
+	    "$constructor",
+	    ds e,
+	    { p ; e = ELet (
+		"$proto",
+		{ p ; e = EGetFieldSurface (
+		    { p ; e = EId "$constructor" },
+		    str p "prototype",
+		    args_thunk p []) },
+		{ p ; e = ELet (
+		    "$newObj",
+		    new_obj p "$proto",
+		    { p ; e = ELet (
+			"$resObj",
+			{ p ; e = EApp (
+				    { p ; e = EId "$constructor" },
+				    [{ p ; e = EId "$newObj" };
+				     args_obj p (map ds args)]) },
+			{ p ; e = EIf (
+			    { p ; e = EOp2 (
+				`Prim2 ("stx="),
+				{ p ; e = EOp1 (
+				    `Op1Prefix ("typeof"),
+				    { p ; e = EId "$resObj" }) },
+				{ p ; e = EConst (S.CString "object") }) },
+			    { p ; e = EId "$resObj" },
+			    { p ; e = EId "$newObj" } ) }) }) }) }) }
+
+
 
     | PrefixExpr (p, op, e) ->
-	EOp1 (p, `Op1Prefix (op), ds e)
+	{ p ; e = EOp1 (`Op1Prefix op, ds e) }
 
     | InfixExpr (p, op, e1, e2) ->
-	EOp2 (p, `Op2Infix (op), ds e1, ds e2)
+	{ p ; e = EOp2 (`Op2Infix op, ds e1, ds e2) }
 
     | IfExpr (p, c, t, e) ->
-	EIf (p, ds c, ds t, ds e)
+	{ p ; e = EIf (ds c, ds t, ds e) }
 
     | AppExpr (p, BracketExpr (p', obj, prop), es) ->
-	ELet (p, "$obj", ds obj,
-	      ELet (p, "$fun", EGetFieldSurface (p', EId (p, "$obj"), ds prop, args_thunk p []),
-		    EApp (p, EId (p', "$fun"),
-			  [EId (p', "$obj"); args_obj p (map ds es)])))
-	  
+	{ p ; e = ELet (
+	    "$obj",
+	    ds obj,
+	    { p ; e = ELet ("$fun", { p = p' ; e = EGetFieldSurface ({ p ; e = EId "$obj" }, ds prop, args_thunk p []) },
+			    { p ; e = EApp ({ p = p' ; e = EId "$fun" },
+					    [{ p = p' ; e = EId "$obj" }; args_obj p (map ds es)]) }) }) }
+
     | AppExpr (p, func, es) ->
-	ELet (p, "$fun", ds func,
-	      EApp (p, EId (p, "$fun"),
-		    [EId (p, "[[global]]"); args_obj p (map ds es)]))
+	{ p ; e = ELet (
+	    "$fun",
+	    ds func,
+	    { p ; e = EApp (
+		{ p ; e = EId "$fun" },
+		[{ p ; e = EId "[[global]]" }; args_obj p (map ds es)]) }) }
 
     | FuncExpr (p, ids, body) ->
 	func_object p ids (func_expr_lambda p ids (var_lift body))
 
     | FuncStmtExpr (p, func_name, ids, body) ->
-	ESeq (p, 
-	      ESet (p, func_name, 
-		    func_object p ids (func_stmt_lambda p func_name ids (var_lift body))),
-	      EId (p, func_name))
+	{ p ; e = ESeq (
+	    { p ; e = ESet (
+		func_name,
+		func_object p ids (func_stmt_lambda p func_name ids (var_lift body))) },
+	    { p ; e = EId func_name }) }
 
-    | LetExpr (p, x, e1, e2) -> ELet (p, x, ds e1, ds e2)
+    | LetExpr (p, x, e1, e2) -> { p ; e = ELet (x, ds e1, ds e2) }
 
-    | SeqExpr (p, e1, e2) -> ESeq (p, ds e1, ds e2)
+    | SeqExpr (p, e1, e2) -> { p ; e = ESeq (ds e1, ds e2) }
 
     | WhileExpr (p, check, body) ->
-	ELet (p, 
-	      "$check", 
-	      EFix (p, 
-		    "$check", 
-		    ELambda (p, [], 
-			     EIf (p,
-				  ds check,
-				  ESeq (p, 
-					ds body,
-					EApp (p, EId (p, "$check"), [])),
-				  EConst (p, S.CUndefined)))),
-	      EApp (p, EId (p, "$check"), []))
+	{ p ; e = ELet (
+	    "$check",
+	    { p ; e = EFix (
+		"$check",
+		{ p ; e = ELambda (
+		    [],
+		    { p ; e = EIf (
+			ds check,
+			{ p ; e = ESeq (
+			    ds body,
+			    { p ; e = EApp ({ p ; e = EId "$check" }, []) }) },
+			{ p ; e = EConst S.CUndefined }) }) }) },
+	    { p ; e = EApp ({ p ; e = EId "$check" }, []) }) }
 
     | DoWhileExpr (p, body, check) ->
 	let body_exp = ds body in
-	  ESeq (p, body_exp,
-		ELet (p, "$check",
-		      EFix (p, "$check", 
-			    ELambda (p, [], 
-				     EIf (p, ds check,
-					  ESeq (p, body_exp,
-						EApp (p, EId (p, "$check"), [])),
-					  EConst (p, S.CUndefined)))),
-		      EApp (p, EId (p, "$check"), [])))
+	{ p ; e = ESeq (
+	    body_exp,
+	    { p ; e = ELet (
+		"$check",
+		{ p ; e = EFix (
+		    "$check",
+		    { p ; e = ELambda (
+			[],
+			{ p ; e = EIf (
+			    ds check,
+			    { p ; e = ESeq (
+				body_exp,
+				{ p ; e = EApp ({ p ; e = EId "$check" }, []) })},
+			    { p ; e = EConst S.CUndefined }) }) }) },
+		{ p ; e = EApp ({ p ; e = EId "$check" }, []) }) }) }
 
     | LabelledExpr (p, l, e) ->
-	ELabel (p, l, ds e)
+	{ p ; e = ELabel (l, ds e) }
     | BreakExpr (p, l, e) ->
-	EBreak (p, l, ds e)
+	{ p ; e = EBreak (l, ds e) }
     | ForInExpr (p, x, obj, body) ->
-	let body_fun = ELambda (p, [], ds body) in
-	let set_fun = ELambda (p, ["%new-index"], ESet (p, x, EId (p, "%new-index"))) in
-	  EApp (p, EId (p, "[[forin]]"), [ds obj; set_fun; body_fun])
+	let body_fun = { p ; e = ELambda ([], ds body) } in
+	let set_fun = { p ; e = ELambda (["%new-index"], { p ; e = ESet (x, { p ; e = EId "%new-index" }) }) } in
+	{ p ; e = EApp ({ p ; e = EId "[[forin]]" }, [ds obj; set_fun; body_fun]) }
     | VarDeclExpr (p, x, e) ->
-	ESet (p, x, ds e)
+	{ p ; e = ESet (x, ds e) }
     | TryCatchExpr (p, body, x, catch) ->
-	ETryCatch (p, ds body, ELambda (p, [x], ds catch))
+	{ p ; e = ETryCatch (ds body, { p ; e = ELambda ([x], ds catch) }) }
     | TryFinallyExpr (p, body, fin) ->
-	ETryFinally (p, ds body, ds fin)
+	{ p ; e = ETryFinally (ds body, ds fin) }
     | ThrowExpr (p, e) ->
-	EThrow (p, ds e)
+	{ p ; e = EThrow (ds e) }
     | HintExpr (p, e1, e2) -> str p "NYI---Hints"
 
 and ds_fields fields = 
@@ -176,14 +192,14 @@ and ds_fields fields =
     let add_attr a v = 
       IdMap.add name (AttrMap.add a v (this_fld_for a)) fld_map in
     let mk_bind attr_expr obj =
-      binder (ELet (p, ident, ds attr_expr, obj)) in
+      binder ({ p ; e = ELet (ident, ds attr_expr, obj) }) in
     match expr with
-      | SetterExpr (p, setter_exp) -> 
-          mk_bind setter_exp, add_attr Setter (EId (p, ident))
+      | SetterExpr (p, setter_exp) ->
+          mk_bind setter_exp, add_attr Setter ({ p ; e = EId ident })
       | GetterExpr (p, getter_exp) -> 
-          mk_bind getter_exp, add_attr Getter (EId (p, ident))
+          mk_bind getter_exp, add_attr Getter ({ p ; e = EId ident })
       | value_exp ->
-          mk_bind value_exp, add_attr Value (EId (p, ident))
+          mk_bind value_exp, add_attr Value ({ p ; e = EId ident })
   in
   let defaults = 
     AttrMap.add Config (true_c dummy_pos)
@@ -206,7 +222,7 @@ and ds_fields fields =
 
 and var_lift expr =
   let folder (p,id) e = 
-    ELet (p, id, undef_c p, e) in
+    { p ; e = ELet (id, undef_c p, e) } in
     List.fold_right folder (vars_in expr) (ds expr)
 
 (* Collect all the vars (and their source locations) in the
@@ -250,243 +266,243 @@ and vars_in expr = match expr with
   | HintExpr (_,_,_) -> []
 
 
-let rec ds_op (exp : src_exp) : prim_exp = match exp with
-  | EOp1 (p, `Op1Prefix op, e) -> begin match op with
-      | "prefix:delete" -> begin match e with
-	  | EGetFieldSurface (p, obj, field, args) ->
-	      EDeleteField (p, ds_op obj, ds_op field)
-	  | _ -> ESeq (p, ds_op e, true_c p)
+let rec ds_op ({ p ; e } : src_exp) : prim_exp = match e with
+| EOp1 (`Op1Prefix op, e) ->
+    begin match op with
+    | "prefix:delete" ->
+	begin match e with
+	| { p ; e = EGetFieldSurface (obj, field, args) } ->
+	    { p ; e = EDeleteField (ds_op obj, ds_op field) }
+	| _ -> { p ; e = ESeq (ds_op e, true_c p) }
 	end
-      | "prefix:!" -> 
-          EIf (p, EOp1 (p, `Prim1 "prim->bool", ds_op e),
-               false_c p,
-               true_c p)
-      | "prefix:~" ->
-          EOp1 (p, `Prim1 "~",
-                EApp (p, EId (p, "[[toInt]]"), [ ds_op e ]))
-      | "prefix:+" ->
-          EApp (p, EId (p, "[[ToNumber]]"), [ ds_op e ])
-      | "prefix:-" ->
-          EOp2 (p, `Prim2 "-",
-                num_c p 0.0,
-                EApp (p, EId (p, "[[ToNumber]]"), [ ds_op e ]))
-      | "typeof" ->
-          EOp1 (p, `Prim1 "typeof", ds_op e)
-      | "prefix:typeof" ->
-          EOp1 (p, `Prim1 "surface-typeof", ds_op e)
-      | "prefix:void" ->
-          ESeq (p, ds_op e, EConst (p, S.CUndefined))
-      | _ -> failwith ("unknown prefix operator: " ^ op)
+    | "prefix:!" ->
+	{ p ; e = EIf ({ p ; e = EOp1 (`Prim1 "prim->bool", ds_op e) },
+		       false_c p,
+		       true_c p) }
+    | "prefix:~" ->
+	{ p ; e = EOp1 (`Prim1 "~",
+			{ p ; e = EApp ({ p ; e = EId "[[toInt]]" }, [ ds_op e ]) }) }
+    | "prefix:+" ->
+	{ p ; e = EApp ({ p ; e = EId "[[ToNumber]]" }, [ ds_op e ]) }
+    | "prefix:-" ->
+	{ p ; e = EOp2 (`Prim2 "-",
+			num_c p 0.0,
+			{ p ; e = EApp ({ p ; e = EId "[[ToNumber]]" }, [ ds_op e ]) }) }
+    | "typeof" ->
+	{ p ; e = EOp1 (`Prim1 "typeof", ds_op e) }
+    | "prefix:typeof" ->
+	{ p ; e = EOp1 (`Prim1 "surface-typeof", ds_op e) }
+    | "prefix:void" ->
+	{ p ; e = ESeq (ds_op e, { p ; e = EConst S.CUndefined }) }
+    | _ -> failwith ("unknown prefix operator: " ^ op)
     end
-  | EOp2 (p, `Op2Infix op, e1, e2) -> begin match op with
-      | "*" -> numnum p op e1 e2
-      | "/" -> numnum p op e1 e2
-      | "%" -> numnum p op e1 e2
-      | "-" -> numnum p op e1 e2
-      | "&" -> int_int p op e1 e2
-      | "|" -> int_int p op e1 e2
-      | "^" -> int_int p op e1 e2
-      | "<<" -> int_uint p op e1 e2
-      | ">>" -> int_uint p op e1 e2
-      | ">>>" -> uint_uint p op e1 e2
-      | "<" -> EOp2 (p, `Prim2 "<", ds_op e1, ds_op e2)
-      | ">" -> EOp2 (p, `Prim2 ">", ds_op e1, ds_op e2)
-      | ">=" -> EIf (p, EOp2 (p, `Prim2 "<", ds_op e1, ds_op e2),
-		     false_c p, true_c p)
-      | "<=" -> EIf (p, EOp2 (p, `Prim2 ">", ds_op e1, ds_op e2),
-		     false_c p, true_c p)
-      | "instanceof" -> EApp (p, EId (p, "[[instanceof]]"), 
-			      [ ds_op e1; ds_op e2])
-      | "in" -> EApp (p, EId (p, "[[in]]"),
-		      [ ds_op e1; ds_op e2])
-	  (* The equality operators are implemented in \JS *)
-      | "==" -> EOp2 (p, `Prim2 "abs=",
-		      ds_op e1, ds_op e2)
-      | "!=" -> EIf (p, EOp2 (p, `Prim2 "==",
-			      ds_op e1, ds_op e2),
-		     false_c p, true_c p)
-      | "===" -> EOp2 (p, `Prim2 "stx=",
-		       ds_op e1, ds_op e2)
-      | "!==" -> EIf (p, EOp2 (p, `Prim2 "stx=",
-			       ds_op e1, ds_op e2),
-		      false_c p, true_c p)
-	  (* 11.11 *)
-      | "&&" -> ELet (p, "$lAnd", ds_op e1,
-		      EIf (p, EApp (p, EId (p, "[[toBoolean]]"), 
-				    [ EId (p, "$lAnd") ]),
-			   ds_op e2,
-			   EId (p, "$lAnd")))
-      | "||" -> ELet (p, "$lOr", ds_op e1,
-		      EIf (p, EApp (p, EId (p, "[[toBoolean]]"), 
-				    [ EId (p, "$lOr") ]),
-			   EId (p, "$lOr"),
-			   ds_op e2))
-      | "+" -> EApp (p, EId (p, "[[plus]]"), [ds_op e1; ds_op e2])
-      | _ -> failwith ("unknown infix operator: " ^ op)
+| EOp2 (`Op2Infix op, e1, e2) ->
+    begin match op with
+    | "*" -> numnum p op e1 e2
+    | "/" -> numnum p op e1 e2
+    | "%" -> numnum p op e1 e2
+    | "-" -> numnum p op e1 e2
+    | "&" -> int_int p op e1 e2
+    | "|" -> int_int p op e1 e2
+    | "^" -> int_int p op e1 e2
+    | "<<" -> int_uint p op e1 e2
+    | ">>" -> int_uint p op e1 e2
+    | ">>>" -> uint_uint p op e1 e2
+    | "<" -> { p ; e = EOp2 (`Prim2 "<", ds_op e1, ds_op e2) }
+    | ">" -> { p ; e = EOp2 (`Prim2 ">", ds_op e1, ds_op e2) }
+    | ">=" -> { p ; e = EIf ({ p ; e = EOp2 (`Prim2 "<", ds_op e1, ds_op e2) },
+			     false_c p, true_c p) }
+    | "<=" -> { p ; e = EIf ({ p ; e = EOp2 (`Prim2 ">", ds_op e1, ds_op e2) },
+			     false_c p, true_c p) }
+    | "instanceof" -> { p ; e = EApp ({ p ; e = EId "[[instanceof]]" },
+				      [ ds_op e1; ds_op e2]) }
+    | "in" -> { p ; e = EApp ({ p ; e = EId "[[in]]" },
+			      [ ds_op e1; ds_op e2]) }
+	(* The equality operators are implemented in \JS *)
+    | "==" -> { p ; e = EOp2 (`Prim2 "abs=", ds_op e1, ds_op e2) }
+    | "!=" -> { p ; e = EIf ({ p ; e = EOp2 (`Prim2 "==", ds_op e1, ds_op e2) },
+			     false_c p, true_c p) }
+    | "===" -> { p ; e = EOp2 (`Prim2 "stx=", ds_op e1, ds_op e2) }
+    | "!==" -> { p ; e = EIf ({ p ; e = EOp2 (`Prim2 "stx=", ds_op e1, ds_op e2) },
+			      false_c p, true_c p) }
+	(* 11.11 *)
+    | "&&" -> { p ; e = ELet ("$lAnd", ds_op e1,
+			      { p ; e = EIf ({ p ; e = EApp ({ p ; e = EId "[[toBoolean]]" },
+							     [{ p ; e = EId "$lAnd" }]) },
+					     ds_op e2,
+					     { p ; e = EId "$lAnd" }) }) }
+    | "||" -> { p ; e = ELet ("$lOr", ds_op e1,
+			      { p ; e = EIf ({ p ; e = EApp ({ p ; e = EId "[[toBoolean]]"},
+							     [{ p ; e = EId "$lOr" }]) },
+					     { p ; e = EId "$lOr" },
+					     ds_op e2) }) }
+    | "+" -> { p ; e = EApp ({ p ; e = EId "[[plus]]" }, [ds_op e1; ds_op e2]) }
+    | _ -> failwith ("unknown infix operator: " ^ op)
     end
-  | EOp1 (p, `Prim1 op, e) -> EOp1 (p, `Prim1 op, ds_op e)
-  | EOp2 (p, `Prim2 op, e1, e2) -> EOp2 (p, `Prim2 op, ds_op e1, ds_op e2)
-  | EOp3 (p, `Op3Prefix op, e1, e2, e3) -> failwith ("unknown prefix operator: " ^ op)
-  | EOp3 (p, `Prim3 op, e1, e2, e3) -> EOp3 (p, `Prim3 op, ds_op e1, ds_op e2, ds_op e3)
-  | EConst (p, c) -> EConst (p, c)
-  | EId (p, x) -> EId (p, x)
-  | EObject (p, internals, fields) -> 
-      let ds_op_attr (name, value) = (name, ds_op value) in
-      let ds_op_field (name, attrs) = (name, map ds_op_attr attrs) in
-	EObject (p, map ds_op_attr internals, map ds_op_field fields)
-  | EUpdateFieldSurface (p, o, f, v, args) -> 
-      EUpdateFieldSurface (p, ds_op o, ds_op f, ds_op v, ds_op args)
-  | EGetFieldSurface (p, o, f, args) -> 
-      EGetFieldSurface (p, ds_op o, ds_op f, ds_op args)
-  | EDeleteField (p, o, f) -> 
-      EDeleteField (p, ds_op o, ds_op f)
-  | EAttr (p, a, o, f) ->
-      EAttr (p, a, ds_op o, ds_op f)
-  | ESetAttr (p, a, o, f, v) ->
-      ESetAttr (p, a, ds_op o, ds_op f, ds_op v)
-  | ESet (p, x, v) -> 
-      ESet (p, x, ds_op v)
-  | EIf (p, c, t, e) -> 
-      EIf (p, ds_op c, ds_op t, ds_op e)
-  | EApp (p, func, args) -> 
-      EApp (p, ds_op func, map ds_op args)
-  | ESeq (p, e1, e2) -> 
-      ESeq (p, ds_op e1, ds_op e2)
-  | ELet (p, x, e1, body) -> 
-      ELet (p, x, ds_op e1, ds_op body)
-  | EFix (p, x, e) -> EFix (p, x, ds_op e)
-  | ELabel (p, l, e) -> ELabel (p, l, ds_op e)
-  | EBreak (p, l, e) -> EBreak (p, l, ds_op e)
-  | ETryCatch (p, body, catch) -> 
-      ETryCatch (p, ds_op body, ds_op catch)
-  | ETryFinally (p, body, fin) ->
-      ETryFinally (p, ds_op body, ds_op fin)
-  | EThrow (p, e) -> EThrow (p, ds_op e)
-  | ELambda (p, ids, body) -> ELambda (p, ids, ds_op body)
-  | _ -> failwith "Unmatched in ds_op"
+| EOp1 (`Prim1 op, e) -> { p ; e = EOp1 (`Prim1 op, ds_op e) }
+| EOp2 (`Prim2 op, e1, e2) -> { p ; e = EOp2 (`Prim2 op, ds_op e1, ds_op e2) }
+| EOp3 (`Op3Prefix op, e1, e2, e3) -> failwith ("unknown prefix operator: " ^ op)
+| EOp3 (`Prim3 op, e1, e2, e3) -> { p ; e = EOp3 (`Prim3 op, ds_op e1, ds_op e2, ds_op e3) }
+| EConst c -> { p ; e = EConst c }
+| EId x -> { p ; e = EId x }
+| EObject (internals, fields) ->
+    let ds_op_attr (name, value) = (name, ds_op value) in
+    let ds_op_field (name, attrs) = (name, map ds_op_attr attrs) in
+    { p ; e = EObject (map ds_op_attr internals, map ds_op_field fields) }
+| EUpdateFieldSurface (o, f, v, args) ->
+    { p ; e = EUpdateFieldSurface (ds_op o, ds_op f, ds_op v, ds_op args) }
+| EGetFieldSurface (o, f, args) ->
+    { p ; e = EGetFieldSurface (ds_op o, ds_op f, ds_op args) }
+| EDeleteField (o, f) ->
+    { p ; e = EDeleteField (ds_op o, ds_op f) }
+| EAttr (a, o, f) ->
+    { p ; e = EAttr (a, ds_op o, ds_op f) }
+| ESetAttr (a, o, f, v) ->
+    { p ; e = ESetAttr (a, ds_op o, ds_op f, ds_op v) }
+| ESet (x, v) ->
+    { p ; e = ESet (x, ds_op v) }
+| EIf (c, t, e) ->
+    { p ; e = EIf (ds_op c, ds_op t, ds_op e) }
+| EApp (func, args) ->
+    { p ; e = EApp (ds_op func, map ds_op args) }
+| ESeq (e1, e2) ->
+    { p ; e = ESeq (ds_op e1, ds_op e2) }
+| ELet (x, e1, body) ->
+    { p ; e = ELet (x, ds_op e1, ds_op body) }
+| EFix (x, e) -> { p ; e = EFix (x, ds_op e) }
+| ELabel (l, e) -> { p ; e = ELabel (l, ds_op e) }
+| EBreak (l, e) -> { p ; e = EBreak (l, ds_op e) }
+| ETryCatch (body, catch) ->
+    { p ; e = ETryCatch (ds_op body, ds_op catch) }
+| ETryFinally (body, fin) ->
+    { p ; e = ETryFinally (ds_op body, ds_op fin) }
+| EThrow e -> { p ; e = EThrow (ds_op e) }
+| ELambda (ids, body) -> { p ; e = ELambda (ids, ds_op body) }
 
-and numnum p op e1 e2 = 
-  EOp2 (p, `Prim2 op,
-        EApp (p, EId (p, "[[ToNumber]]"), [ ds_op e1 ]),
-        EApp (p, EId (p, "[[ToNumber]]"), [ ds_op e2 ]))
+and numnum p op e1 e2 =
+  { p ; e = EOp2 (`Prim2 op,
+        { p ; e = EApp ({ p ; e = EId "[[ToNumber]]" }, [ ds_op e1 ]) },
+        { p ; e = EApp ({ p ; e = EId "[[ToNumber]]" }, [ ds_op e2 ]) }) }
 
 and int_int p op e1 e2 =
-  EOp2 (p, `Prim2 op,
-        EApp (p, EId (p, "[[toInt]]"), [ ds_op e1 ]),
-        EApp (p, EId (p, "[[toInt]]"), [ ds_op e2 ]))
+  { p ; e = EOp2 (`Prim2 op,
+        { p ; e = EApp ({ p ; e = EId "[[toInt]]" }, [ ds_op e1 ]) },
+        { p ; e = EApp ({ p ; e = EId "[[toInt]]" }, [ ds_op e2 ]) }) }
 
-and int_uint p op e1 e2 = 
-  EOp2 (p, `Prim2 op,
-        EApp (p, EId (p, "[[toInt]]"), [ ds_op e1 ]),
-        EApp (p, EId (p, "[[toUInt]]"), [ ds_op e2 ]))
+and int_uint p op e1 e2 =
+  { p ; e = EOp2 (`Prim2 op,
+        { p ; e = EApp ({ p ; e = EId "[[toInt]]" }, [ ds_op e1 ]) },
+        { p ; e = EApp ({ p ; e = EId "[[toUInt]]" }, [ ds_op e2 ]) }) }
 
 and uint_uint p op e1 e2 = 
-  EOp2 (p, `Prim2 op,
-        EApp (p, EId (p, "[[toUInt]]"), [ ds_op e1 ]),
-        EApp (p, EId (p, "[[toUInt]]"), [ ds_op e2 ]))
+  { p ; e = EOp2 (`Prim2 op,
+        { p ; e = EApp ({ p ; e = EId "[[toUInt]]" }, [ ds_op e1 ]) },
+        { p ; e = EApp ({ p ; e = EId "[[toUInt]]" }, [ ds_op e2 ]) }) }
 
-let rec ds_global exp env = match exp with
-  | EApp (p, e, es) ->
-      EApp (p, ds_global e env, map (fun e -> ds_global e env) es)
-  | EId (p, x) -> begin
+let rec ds_global { p ; e } env = match e with
+  | EApp (e, es) ->
+      { p ; e = EApp (ds_global e env, map (fun e -> ds_global e env) es) }
+  | EId (x) -> begin
       try
-	if IdMap.find x env 
-	then EId (p, x)
-	else EGetFieldSurface (p, EId (p, "[[global]]"), str p x, args_thunk p [])
+	if IdMap.find x env
+	then { p ; e = EId x }
+	else { p ; e = EGetFieldSurface ({ p ; e = EId "[[global]]" }, str p x, args_thunk p []) }
       with Not_found ->
-	EGetFieldSurface (p, EId (p, "[[global]]"), str p x, args_thunk p [])
+	{ p ; e = EGetFieldSurface ({ p ; e = EId "[[global]]" }, str p x, args_thunk p []) }
     end
-  | ESet (p, x, e) -> begin
+  | ESet (x, e) -> begin
       try
-	if IdMap.find x env 
-	then ESet (p, x, ds_global e env)
-	else 
-	  ELet (p, "$newVal", ds_global e env,
-		EUpdateFieldSurface (p, 
-				     EId (p, "[[global]]"), 
-				     str p x, 
-				     EId (p, "$newVal"), 
-				     args_thunk p [EId (p, "$newVal")]))
+	if IdMap.find x env
+	then { p ; e = ESet (x, ds_global e env) }
+	else
+	  { p ; e = ELet ("$newVal", ds_global e env,
+		{ p ; e = EUpdateFieldSurface (
+				     { p ; e = EId "[[global]]" },
+				     str p x,
+				     { p ; e = EId "$newVal" },
+				     args_thunk p [{ p ; e = EId "$newVal" }]) }) }
       with Not_found ->
-	ELet (p, "$newVal", ds_global e env,
-	      EUpdateFieldSurface (p, 
-				   EId (p, "[[global]]"), 
-				   str p x, 
-				   EId (p, "$newVal"), 
-				   args_thunk p [EId (p, "$newVal")]))
+	{ p ; e = ELet ("$newVal", ds_global e env,
+	      { p ; e = EUpdateFieldSurface (
+				   { p ; e = EId "[[global]]" },
+				   str p x,
+				   { p ; e = EId "$newVal" },
+				   args_thunk p [{ p ; e = EId "$newVal" }]) }) }
     end
-  | ELambda (p, ids, e) ->
+  | ELambda (ids, e) ->
       let new_env = fold_left (fun env x -> IdMap.add x true env) env ids in
-	ELambda (p, ids, ds_global e new_env)
-  | ELet (p, x, e1, e2) ->
-      ELet (p, x, ds_global e1 env, ds_global e2 (IdMap.add x true env))
-  | EFix (p, x, e) -> 
-      EFix (p, x, ds_global e (IdMap.add x true env))
-  | EConst (p, c) -> exp
-  | EObject (p, attrs, props) ->
+	{ p ; e = ELambda (ids, ds_global e new_env) }
+  | ELet (x, e1, e2) ->
+      { p ; e = ELet (x, ds_global e1 env, ds_global e2 (IdMap.add x true env)) }
+  | EFix (x, e) -> 
+      { p ; e = EFix (x, ds_global e (IdMap.add x true env)) }
+  | EConst _ -> { p ; e }
+  | EObject (attrs, props) ->
       let attr (name, value) = (name, ds_global value env) in
       let prop (name, attrs) = (name, map attr attrs) in
-	EObject (p, map attr attrs, map prop props)
-  | EUpdateFieldSurface (p, o, f, e, args) ->
-      EUpdateFieldSurface (p, ds_global o env, 
-			   ds_global f env, 
-			   ds_global e env,
-			   ds_global args env)
-  | EGetFieldSurface (p, o, f, args) ->
-      EGetFieldSurface (p, ds_global o env, ds_global f env, ds_global args env)
-  | EDeleteField (p, o, f) ->
-      EDeleteField (p, ds_global o env, ds_global f env)
-  | EAttr (p, a, o, f) ->
-      EAttr (p, a, ds_global o env, ds_global f env)
-  | ESetAttr (p, a, o, f, v) ->
-      ESetAttr (p, a, ds_global o env, ds_global f env, ds_global v env)
-  | EOp1 (p, op, e) -> EOp1 (p, op, ds_global e env)
-  | EOp2 (p, op, e1, e2) -> EOp2 (p, op, ds_global e1 env, ds_global e2 env)
-  | EOp3 (p, op, e1, e2, e3) -> EOp3 (p, op, ds_global e1 env, 
-				      ds_global e2 env,
-				      ds_global e3 env)
-  | EIf (p, c, t, e) -> 
-      EIf (p, ds_global c env, ds_global t env, ds_global e env)
-  | ESeq (p, e1, e2) -> ESeq (p, ds_global e1 env, ds_global e2 env)
-  | ELabel (p, l, e) -> ELabel (p, l, ds_global e env)
-  | EBreak (p, l, e) -> EBreak (p, l, ds_global e env)
-  | ETryCatch (p, e1, e2) -> ETryCatch (p, ds_global e1 env, ds_global e2 env)
-  | ETryFinally (p, e1, e2) -> 
-      ETryFinally (p, ds_global e1 env, ds_global e2 env)
-  | EThrow (p, e) -> EThrow (p, ds_global e env)
+	{ p ; e = EObject (map attr attrs, map prop props) }
+  | EUpdateFieldSurface (o, f, e, args) ->
+      { p ; e = EUpdateFieldSurface (ds_global o env,
+				     ds_global f env,
+				     ds_global e env,
+				     ds_global args env) }
+  | EGetFieldSurface (o, f, args) ->
+      { p ; e = EGetFieldSurface (ds_global o env, ds_global f env, ds_global args env) }
+  | EDeleteField (o, f) ->
+      { p ; e = EDeleteField (ds_global o env, ds_global f env) }
+  | EAttr (a, o, f) ->
+      { p ; e = EAttr (a, ds_global o env, ds_global f env) }
+  | ESetAttr (a, o, f, v) ->
+      { p ; e = ESetAttr (a, ds_global o env, ds_global f env, ds_global v env) }
+  | EOp1 (op, e) -> { p ; e = EOp1 (op, ds_global e env) }
+  | EOp2 (op, e1, e2) -> { p ; e = EOp2 (op, ds_global e1 env, ds_global e2 env) }
+  | EOp3 (op, e1, e2, e3) -> { p ; e = EOp3 (op, ds_global e1 env,
+					     ds_global e2 env,
+					     ds_global e3 env) }
+  | EIf (c, t, e) ->
+      { p ; e = EIf (ds_global c env, ds_global t env, ds_global e env) }
+  | ESeq (e1, e2) -> { p ; e = ESeq (ds_global e1 env, ds_global e2 env) }
+  | ELabel (l, e) -> { p ; e = ELabel (l, ds_global e env) }
+  | EBreak (l, e) -> { p ; e = EBreak (l, ds_global e env) }
+  | ETryCatch (e1, e2) -> { p ; e = ETryCatch (ds_global e1 env, ds_global e2 env) }
+  | ETryFinally (e1, e2) ->
+      { p ; e = ETryFinally (ds_global e1 env, ds_global e2 env) }
+  | EThrow e -> { p ; e = EThrow (ds_global e env) }
 
 
 let ds_top expr = ds expr
 let desugar expr = ds_global (ds_op expr) IdMap.empty
 
 
-let rec check_op (exp : src_exp) : prim_exp = match exp with
-  | EOp1 (p, `Op1Prefix op, _) -> failwith ("[check_op] prefix operator: " ^ op)
-  | EOp2 (p, `Op2Infix op, _, _) -> failwith ("[check_op] infix operator: " ^ op)
-  | EOp3 (p, `Op3Prefix op, _, _, _) -> failwith ("[check_op] prefix operator: " ^ op)
-  | EOp1 (p, `Prim1 op, e) -> EOp1 (p, `Prim1 op, check_op e)
-  | EOp2 (p, `Prim2 op, e1, e2) -> EOp2 (p, `Prim2 op, check_op e1, check_op e2)
-  | EOp3 (p, `Prim3 op, e1, e2, e3) -> EOp3 (p, `Prim3 op, check_op e1, check_op e2, check_op e3)
-  | EConst (p, c) -> EConst (p, c)
-  | EId (p, x) -> EId (p, x)
-  | EObject (p, internals, fields) ->
+let rec check_op ({ p ; e } : src_exp) : prim_exp =
+  let e = match e with
+  | EOp1 (`Op1Prefix op, _) -> failwith ("[check_op] prefix operator: " ^ op)
+  | EOp2 (`Op2Infix op, _, _) -> failwith ("[check_op] infix operator: " ^ op)
+  | EOp3 (`Op3Prefix op, _, _, _) -> failwith ("[check_op] prefix operator: " ^ op)
+  | EOp1 (`Prim1 op, e) -> EOp1 (`Prim1 op, check_op e)
+  | EOp2 (`Prim2 op, e1, e2) -> EOp2 (`Prim2 op, check_op e1, check_op e2)
+  | EOp3 (`Prim3 op, e1, e2, e3) -> EOp3 (`Prim3 op, check_op e1, check_op e2, check_op e3)
+  | EConst c -> EConst c
+  | EId x -> EId x
+  | EObject (internals, fields) ->
       let check_op_attr (name, value) = (name, check_op value) in
       let check_op_field (name, attrs) = (name, map check_op_attr attrs) in
-	EObject (p, map check_op_attr internals, map check_op_field fields)
-  | EUpdateFieldSurface (p, o, f, v, args) -> EUpdateFieldSurface (p, check_op o, check_op f, check_op v, check_op args)
-  | EGetFieldSurface (p, o, f, args) -> EGetFieldSurface (p, check_op o, check_op f, check_op args)
-  | EDeleteField (p, o, f) -> EDeleteField (p, check_op o, check_op f)
-  | EAttr (p, a, o, f) -> EAttr (p, a, check_op o, check_op f)
-  | ESetAttr (p, a, o, f, v) -> ESetAttr (p, a, check_op o, check_op f, check_op v)
-  | ESet (p, x, v) -> ESet (p, x, check_op v)
-  | EIf (p, c, t, e) -> EIf (p, check_op c, check_op t, check_op e)
-  | EApp (p, func, args) -> EApp (p, check_op func, map check_op args)
-  | ESeq (p, e1, e2) -> ESeq (p, check_op e1, check_op e2)
-  | ELet (p, x, e1, body) -> ELet (p, x, check_op e1, check_op body)
-  | EFix (p, x, e) -> EFix (p, x, check_op e)
-  | ELabel (p, l, e) -> ELabel (p, l, check_op e)
-  | EBreak (p, l, e) -> EBreak (p, l, check_op e)
-  | ETryCatch (p, body, catch) -> ETryCatch (p, check_op body, check_op catch)
-  | ETryFinally (p, body, fin) -> ETryFinally (p, check_op body, check_op fin)
-  | EThrow (p, e) -> EThrow (p, check_op e)
-  | ELambda (p, ids, body) -> ELambda (p, ids, check_op body)
+	EObject (map check_op_attr internals, map check_op_field fields)
+  | EUpdateFieldSurface (o, f, v, args) -> EUpdateFieldSurface (check_op o, check_op f, check_op v, check_op args)
+  | EGetFieldSurface (o, f, args) -> EGetFieldSurface (check_op o, check_op f, check_op args)
+  | EDeleteField (o, f) -> EDeleteField (check_op o, check_op f)
+  | EAttr (a, o, f) -> EAttr (a, check_op o, check_op f)
+  | ESetAttr (a, o, f, v) -> ESetAttr (a, check_op o, check_op f, check_op v)
+  | ESet (x, v) -> ESet (x, check_op v)
+  | EIf (c, t, e) -> EIf (check_op c, check_op t, check_op e)
+  | EApp (func, args) -> EApp (check_op func, map check_op args)
+  | ESeq (e1, e2) -> ESeq (check_op e1, check_op e2)
+  | ELet (x, e1, body) -> ELet (x, check_op e1, check_op body)
+  | EFix (x, e) -> EFix (x, check_op e)
+  | ELabel (l, e) -> ELabel (l, check_op e)
+  | EBreak (l, e) -> EBreak (l, check_op e)
+  | ETryCatch (body, catch) -> ETryCatch (check_op body, check_op catch)
+  | ETryFinally (body, fin) -> ETryFinally (check_op body, check_op fin)
+  | EThrow e -> EThrow (check_op e)
+  | ELambda (ids, body) -> ELambda (ids, check_op body)
+  in { p ; e }

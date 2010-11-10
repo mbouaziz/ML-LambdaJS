@@ -368,5 +368,5 @@ let op2 op = match op with
   | "string+" -> string_plus
   | _ -> failwith ("no implementation of binary operator: " ^ op)
 
-let op3 op = match op with
+let op3 op _ _ _ = match op with
   | _ -> failwith ("no ternary operators yet, so what's this: " ^ op)

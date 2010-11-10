@@ -104,15 +104,15 @@ ids :
 
 func :
  | FUNC LPAREN ids RPAREN LBRACE RETURN seq_exp RBRACE
-   { ELambda (($startpos, $endpos), $3, $7) }
+     { { p = $startpos, $endpos ; e = ELambda ($3, $7) } }
 
 atom :
- | const { EConst (($startpos, $endpos), $1) }
- | ID { EId (($startpos, $endpos), $1) }
+ | const { { p = $startpos, $endpos ; e = EConst $1 } }
+ | ID { { p = $startpos, $endpos ; e = EId $1 } }
  | LBRACE LBRACK attrs RBRACK props RBRACE 
-   { EObject (($startpos, $endpos), $3, $5 )}
+     { { p = $startpos, $endpos ; e = EObject ($3, $5) } }
  | LBRACE seq_exp RBRACE
-   { $2 }
+     { $2 }
  | LPAREN seq_exp RPAREN { $2 }
  | func { $1 }
  | FUNCTION LPAREN ids RPAREN LBRACE RETURN seq_exp RBRACE
@@ -120,90 +120,90 @@ atom :
        let ids = $3 in
        let body = $7 in
        let p = ($startpos, $endpos) in
-	 func_object p ids (func_expr_lambda p ids body)
+       func_object p ids (func_expr_lambda p ids body)
      }
  | TYPEOF atom
-     { EOp1 (($startpos, $endpos), `Prim1 "typeof", $2) }
+     { { p = $startpos, $endpos ; e = EOp1 (`Prim1 "typeof", $2) } }
      
 exp :
  | atom { $1 }
  | exp LPAREN exps RPAREN 
-   { EApp (($startpos, $endpos), $1, $3) }
+     { { p = $startpos, $endpos ; e = EApp ($1, $3) } }
  | PRIM LPAREN STRING COMMA seq_exp COMMA seq_exp COMMA seq_exp RPAREN
-   { EOp3 (($startpos, $endpos), `Prim3 $3, $5, $7, $9) }
+     { { p = $startpos, $endpos ; e = EOp3 (`Prim3 $3, $5, $7, $9) } }
  | PRIM LPAREN STRING COMMA seq_exp COMMA seq_exp RPAREN
-   { EOp2 (($startpos, $endpos), `Prim2 $3, $5, $7) }
+     { { p = $startpos, $endpos ; e = EOp2 (`Prim2 $3, $5, $7) } }
  | PRIM LPAREN STRING COMMA seq_exp RPAREN
-   { EOp1 (($startpos, $endpos), `Prim1 $3, $5) }
+     { { p = $startpos, $endpos ; e = EOp1 (`Prim1 $3, $5) } }
  | ID COLONEQ exp
-   { ESet (($startpos, $endpos), $1, $3) }
+     { { p = $startpos, $endpos ; e = ESet ($1, $3) } }
  | exp EQEQEQUALS exp
-     { EOp2 (($startpos, $endpos), `Prim2 "stx=", $1, $3) }
+     { { p = $startpos, $endpos ; e = EOp2 (`Prim2 "stx=", $1, $3) } }
  | exp BANGEQEQUALS exp
      { let p = ($startpos, $endpos) in
-         EIf (p, EOp2 (p, `Prim2 "stx=", $1, $3),
-              EConst (p, CBool false),
-              EConst (p, CBool true)) }
+       { p ; e = EIf ({ p ; e = EOp2 (`Prim2 "stx=", $1, $3) },
+		      { p ; e = EConst (CBool false) },
+		      { p ; e = EConst (CBool true) }) } }
  | exp LBRACK seq_exp EQUALS seq_exp RBRACK
-   { let p = ($startpos, $endpos) in
-       ELet (p, "$newVal", $5,
-	     EUpdateFieldSurface (p, $1, $3, 
-				  EId (p, "$newVal"), 
-				  args_thunk p [EId (p, "$newVal")])) }
+     { let p = ($startpos, $endpos) in
+       { p ; e = ELet ("$newVal", $5,
+		       { p ; e = EUpdateFieldSurface ($1, $3,
+						      { p ; e = EId "$newVal" },
+						      args_thunk p [{ p ; e = EId "$newVal" }]) }) } }
  | exp LBRACK seq_exp RBRACK
-   { let p = ($startpos, $endpos) in
-     EGetFieldSurface (p, $1,  $3, args_thunk p []) }
+     { let p = ($startpos, $endpos) in
+       { p ; e = EGetFieldSurface ($1,  $3, args_thunk p []) } }
  | exp LBRACK DELETE seq_exp RBRACK
-     { EDeleteField (($startpos, $endpos), $1, $4) }
+     { { p = $startpos, $endpos ; e = EDeleteField ($1, $4) } }
  | exp LBRACK seq_exp LT attr_name GT RBRACK
-     { EAttr (($startpos, $endpos), $5, $1, $3) }
+     { { p = $startpos, $endpos ; e = EAttr ($5, $1, $3) } }
  | exp LBRACK seq_exp LT attr_name GT EQUALS seq_exp RBRACK
-     { ESetAttr (($startpos, $endpos), $5, $1, $3, $8) }
+     { { p = $startpos, $endpos ; e = ESetAttr ($5, $1, $3, $8) } }
  | exp AMPAMP exp
-     { EIf (($startpos, $endpos), $1, 
-            $3,
-            EConst (($startpos, $endpos), CBool false)) }
+     { { p = $startpos, $endpos ; e = EIf ($1, 
+					   $3,
+					   { p = $startpos, $endpos ; e = EConst (CBool false) }) } }
  | exp PIPEPIPE exp
      { let p = ($startpos, $endpos) in
-         ELet (p, "%or", $1,
-               EIf (p, EId (p, "%or"), EId (p, "%or"), $3)) }
+       { p ; e = ELet ("%or", $1,
+		       { p ; e = EIf ({ p ; e = EId "%or" }, { p ; e = EId "%or" }, $3) }) } }
  | FIX ID exp 
-     { EFix (($startpos, $endpos), $2, $3) }
+     { { p = $startpos, $endpos ; e = EFix ($2, $3) } }
 
 
 cexp :
  | exp { $1 }
  | IF LPAREN seq_exp RPAREN seq_exp ELSE seq_exp
-     { EIf (($startpos, $endpos), $3, $5, $7) }
+     { { p = $startpos, $endpos ; e = EIf ($3, $5, $7) } }
  | IF LPAREN seq_exp RPAREN seq_exp
-     { EIf (($startpos, $endpos), $3, $5, 
-	    EConst (($startpos, $endpos), CUndefined)) }
+     { { p = $startpos, $endpos ; e = EIf ($3, $5, 
+					   { p = $startpos, $endpos ; e = EConst CUndefined }) } }
  | LABEL ID COLON seq_exp
-     { ELabel (($startpos, $endpos), $2, $4) } 
+     { { p = $startpos, $endpos ; e = ELabel ($2, $4) } }
  | BREAK ID cexp
-   { EBreak (($startpos, $endpos), $2, $3) }
+     { { p = $startpos, $endpos ; e = EBreak ($2, $3) } }
  | THROW cexp
-   { EThrow (($startpos, $endpos), $2) }
+     { { p = $startpos, $endpos ; e = EThrow $2 } }
  | TRY LBRACE seq_exp RBRACE CATCH LBRACE seq_exp RBRACE
-   { ETryCatch (($startpos, $endpos), $3, $7) }
+     { { p = $startpos, $endpos ; e = ETryCatch ($3, $7) } }
  | TRY LBRACE seq_exp RBRACE FINALLY LBRACE seq_exp RBRACE
-   { ETryFinally (($startpos, $endpos), $3, $7) }
+     { { p = $startpos, $endpos ; e = ETryFinally ($3, $7) } }
 
 seq_exp :
  | cexp { $1 }
  | LET LPAREN ID EQUALS seq_exp RPAREN seq_exp
-   { ELet (($startpos, $endpos), $3, $5, $7) }
+     { { p = $startpos, $endpos ; e = ELet ($3, $5, $7) } }
  | cexp SEMI seq_exp
-   { ESeq (($startpos, $endpos), $1, $3) }
+     { { p = $startpos, $endpos ; e = ESeq ($1, $3) } }
 
 env :
  | EOF
      { fun x -> x }
  | LET LLBRACK ID RRBRACK EQUALS seq_exp env
-     { fun x -> 
-         ELet (($startpos, $endpos), "[[" ^ $3 ^ "]]", rename_env $6, $7 x) }
+     { fun x ->
+         { p = $startpos, $endpos ; e = ELet ("[[" ^ $3 ^ "]]", rename_env $6, $7 x) } }
  | LBRACE seq_exp RBRACE env
-     { fun x -> ESeq (($startpos, $endpos), rename_env $2, $4 x) }
+     { fun x -> { p = $startpos, $endpos ; e = ESeq (rename_env $2, $4 x) } }
 
 prog :
  | seq_exp EOF { $1 }

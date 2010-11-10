@@ -221,9 +221,9 @@ and fun_obj value = match value with
   | _ -> false
 	  
 
-let rec eval (exp : prim_exp) env = match exp with
-  | EConst (p, c) -> Const (c)
-  | EId (p, x) -> begin
+let rec eval ({ p ; e } : prim_exp) env = match e with
+  | EConst c -> Const c
+  | EId x -> begin
       try
 	let varcell = IdMap.find x env in
 	!varcell
@@ -231,7 +231,7 @@ let rec eval (exp : prim_exp) env = match exp with
 	failwith ("[interp] Unbound identifier: " ^ x ^ " in identifier lookup at " ^
 		    (string_of_position p))
     end
-  | ESet (p, x, e) -> begin
+  | ESet (x, e) -> begin
       try
 	let varcell = IdMap.find x env in
 	varcell := eval e env; !varcell
@@ -239,14 +239,14 @@ let rec eval (exp : prim_exp) env = match exp with
 	failwith ("[interp] Unbound identifier: " ^ x ^ " in set! at " ^
 		    (string_of_position p))
     end
-  | EObject (p, attrs, props) ->
+  | EObject (attrs, props) ->
       let eval_obj_attr m (name, e) = IdMap.add name (eval e env) m in
       let eval_prop_attr m (name, e) = AttrMap.add name (eval e env) m in
       let eval_prop m (name, attrs) = 
 	IdMap.add name (fold_left eval_prop_attr AttrMap.empty attrs) m in
 	ObjCell (ref (fold_left eval_obj_attr IdMap.empty attrs,
 		      fold_left eval_prop IdMap.empty props))
-  | EUpdateFieldSurface (p, obj, f, v, args) ->
+  | EUpdateFieldSurface (obj, f, v, args) ->
       let obj_value = eval obj env in
       let f_value = eval f env in
       let v_value = eval v env in
@@ -261,7 +261,7 @@ let rec eval (exp : prim_exp) env = match exp with
 	  | _ -> failwith ("[interp] Update field didn't get an object and a string" 
 			   ^ string_of_position p)
 	end
-  | EGetFieldSurface (p, obj, f, args) ->
+  | EGetFieldSurface (obj, f, args) ->
       let obj_value = eval obj env in
       let f_value = eval f env in 
       let args_value = eval args env in begin
@@ -275,7 +275,7 @@ let rec eval (exp : prim_exp) env = match exp with
 			   ^ " and " 
 			   ^ pretty_value f_value)
 	end
-  | EDeleteField (p, obj, f) ->
+  | EDeleteField (obj, f) ->
       let obj_val = eval obj env in
       let f_val = eval f env in begin
 	match (obj_val, f_val) with
@@ -292,33 +292,33 @@ let rec eval (exp : prim_exp) env = match exp with
 	  | _ -> failwith ("[interp] EDeleteField didn't get an object and string at " ^
 			     string_of_position p)
 	end
-  | EAttr (p, attr, obj, field) ->
+  | EAttr (attr, obj, field) ->
       let obj_val = eval obj env in
       let f_val = eval field env in
 	get_attr attr obj_val f_val
-  | ESetAttr (p, attr, obj, field, newval) ->
+  | ESetAttr (attr, obj, field, newval) ->
       let obj_val = eval obj env in
       let f_val = eval field env in
       let v_val = eval newval env in
 	set_attr attr obj_val f_val v_val
-  | EOp1 (p, `Prim1 str, e) ->
+  | EOp1 (`Prim1 str, e) ->
       let e_val = eval e env in
       op1 str e_val
-  | EOp2 (p, `Prim2 str, e1, e2) ->
+  | EOp2 (`Prim2 str, e1, e2) ->
       let e1_val = eval e1 env in
       let e2_val = eval e2 env in
       op2 str e1_val e2_val
-  | EOp3 (p, `Prim3 str, e1, e2, e3) ->
+  | EOp3 (`Prim3 str, e1, e2, e3) ->
       let e1_val = eval e1 env in
       let e2_val = eval e2 env in
       let e3_val = eval e3 env in
       op3 str e1_val e2_val e3_val
-  | EIf (p, c, t, e) ->
+  | EIf (c, t, e) ->
       let c_val = eval c env in
 	if (c_val = Const (CBool true))
 	then eval t env
 	else eval e env
-  | EApp (p, func, args) -> 
+  | EApp (func, args) -> 
       let func_value = eval func env in
       let args_values = map (fun e -> eval e env) args in begin
 	match func_value, args_values with
@@ -329,33 +329,33 @@ let rec eval (exp : prim_exp) env = match exp with
 	      failwith ("[interp] Need to provide this and args for a call to a function object at " ^ string_of_position p)
 	  | _, _ -> failwith ("[interp] Inapplicable value: " ^ pretty_value func_value ^ ", applied to " ^ pretty_value_list args_values ^ ", at " ^ string_of_position p)
 	end
-  | ESeq (p, e1, e2) -> 
+  | ESeq (e1, e2) -> 
       ignore (eval e1 env);
       eval e2 env
-  | ELet (p, x, e, body) ->
+  | ELet (x, e, body) ->
       let e_val = eval e env in
 	eval body (IdMap.add x (ref e_val) env)
-  | EFix (p, x, e) ->
+  | EFix (x, e) ->
       let x_var = ref (Const CUndefined) in
       let e_val = eval e (IdMap.add x x_var env) in begin
 	  x_var := e_val;
 	  e_val
 	end
-  | ELabel (p, l, e) -> begin
+  | ELabel (l, e) -> begin
       try
 	eval e env
       with Break (l', v) ->
 	if l = l' then v
 	else raise (Break (l', v))
     end
-  | EBreak (p, l, e) ->
+  | EBreak (l, e) ->
       raise (Break (l, eval e env))
-  | ETryCatch (p, body, catch) -> begin
+  | ETryCatch (body, catch) -> begin
       try
 	eval body env
       with Throw v -> apply (eval catch env) [v]
     end
-  | ETryFinally (p, body, fin) -> begin
+  | ETryFinally (body, fin) -> begin
       try
 	ignore (eval body env)
       with
@@ -363,8 +363,8 @@ let rec eval (exp : prim_exp) env = match exp with
 	| Break (l, v) -> ignore (eval fin env); raise (Break (l, v))
     end;
       eval fin env
-  | EThrow (p, e) -> raise (Throw (eval e env))
-  | ELambda (p, xs, e) -> 
+  | EThrow e -> raise (Throw (eval e env))
+  | ELambda (xs, e) -> 
       let set_arg arg x m = IdMap.add x (ref arg) m in
 	Closure (fun args -> 
 		     if (List.length args) != (List.length xs) then

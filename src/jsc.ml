@@ -13,13 +13,15 @@ module ES5v = Es5_values
 let p = Lexing.dummy_pos, Lexing.dummy_pos
 
 let env_special_id = "**ENV-SPECIAL-ID**"
-let env_special_node = ES5s.EOp1(p, `Prim1 env_special_id, ES5s.EConst (p, JavaScript_syntax.CUndefined))
+let env_special_node = ES5s.( { p ; e = EOp1(`Prim1 env_special_id, { p ; e = EConst JavaScript_syntax.CUndefined }) } )
 
 type exptype =
   | Nothing
   | PrimEnv of ES5s.prim_exp
   | SrcExp of ES5s.src_exp
   | PrimExp of ES5s.prim_exp
+
+let eseq e1 e2 = ES5s.( { p ; e = ESeq (e1, e2) } )
 
 let prim_to_src (e : ES5s.prim_exp) : ES5s.src_exp = (e :> ES5s.src_exp)
 
@@ -43,8 +45,8 @@ let load_js (path : string) : unit =
   srcES5 := match !srcES5 with
   | Nothing -> SrcExp newES5
   | PrimEnv _ -> failwith "Env applied to nothing followed by a JS file"
-  | SrcExp e -> SrcExp (ES5s.ESeq (p, e, newES5))
-  | PrimExp e -> SrcExp (ES5s.ESeq (p, prim_to_src e, newES5))
+  | SrcExp e -> SrcExp (eseq e newES5)
+  | PrimExp e -> SrcExp (eseq (prim_to_src e) newES5)
 
 
 let load_es5 (path : string) : unit =
@@ -52,8 +54,8 @@ let load_es5 (path : string) : unit =
   srcES5 := match !srcES5 with
   | Nothing -> PrimExp parsed
   | PrimEnv _ -> failwith "Env applied to nothing followed by an ES5 file"
-  | SrcExp e -> SrcExp (ES5s.ESeq (p, e, prim_to_src parsed))
-  | PrimExp e -> PrimExp (ES5s.ESeq (p, e, parsed))
+  | SrcExp e -> SrcExp (eseq e (prim_to_src parsed))
+  | PrimExp e -> PrimExp (eseq e parsed)
 
 
 let load_file (path : string) : unit =
@@ -92,10 +94,10 @@ let read_env_from_cache_file (s : string) =
   | _, Nothing -> failwith ("Nothing in file " ^ s)
   | Nothing, _ -> cached
   | x, PrimEnv env -> apply_env env x
-  | SrcExp e1, SrcExp e2 -> SrcExp (ES5s.ESeq (p, e1, e2))
-  | SrcExp e1, PrimExp e2 -> SrcExp (ES5s.ESeq (p, e1, prim_to_src e2))
-  | PrimExp e1, SrcExp e2 -> SrcExp (ES5s.ESeq (p, prim_to_src e1, e2))
-  | PrimExp e1, PrimExp e2 -> PrimExp (ES5s.ESeq (p, e1, e2))
+  | SrcExp e1, SrcExp e2 -> SrcExp (eseq e1 e2)
+  | SrcExp e1, PrimExp e2 -> SrcExp (eseq e1 (prim_to_src e2))
+  | PrimExp e1, SrcExp e2 -> SrcExp (eseq (prim_to_src e1) e2)
+  | PrimExp e1, PrimExp e2 -> PrimExp (eseq e1 e2)
   | PrimEnv _, _ -> failwith "Unapplied environment followed by code"
 
 
