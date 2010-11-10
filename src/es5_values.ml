@@ -2,9 +2,10 @@ open Prelude
 open JavaScript_syntax
 open Es5_syntax
 
-type value =
+type obj = { attrs : value IdMap.t ; props : (value AttrMap.t) IdMap.t }
+and value =
   | Const of JavaScript_syntax.const
-  | ObjCell of (value IdMap.t * ((value AttrMap.t) IdMap.t)) ref
+  | ObjCell of obj ref
   | Closure of (value list -> value)
   | Fail of string
 

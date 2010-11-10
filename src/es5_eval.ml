@@ -15,7 +15,7 @@ let rec apply func args = match func with
 (* args is the "arguments" object *)
 let rec apply_obj o this args = match o with
   | ObjCell c -> 
-      let (attrs, props) = !c in
+      let { attrs ; props } = !c in
 	begin
 	  try
 	    let code_attr = IdMap.find "code" attrs in
@@ -29,7 +29,7 @@ let rec apply_obj o this args = match o with
 let rec get_field p obj1 obj2 field args = match obj1 with
   | Const (CNull) -> Const (CUndefined) (* nothing found *)
   | ObjCell c ->
-      let (attrs, props) = !c in begin
+      let { attrs ; props } = !c in begin
 	  try
 	    let prop_attrs = IdMap.find field props in
 	      try 
@@ -56,16 +56,16 @@ let rec get_field p obj1 obj2 field args = match obj1 with
 (* EUpdateField-Add *)
 (* ES5 8.12.5, step 6 *)
 let rec add_field obj field newval = match obj with
-  | ObjCell c -> let (attrs, props) = !c in
+  | ObjCell c -> let { attrs ; props } = !c in
       if IdMap.mem "extensible" attrs &&
 	((IdMap.find "extensible" attrs) = (Const (CBool true))) then begin
-	  c := (attrs, IdMap.add field 
-		  (AttrMap.add Value newval
-		     (AttrMap.add Config (Const (CBool true))
-			(AttrMap.add Writable (Const (CBool true))
-			   (AttrMap.add Enum (Const (CBool true))
-			      AttrMap.empty))))
-		  props);
+	  c := { attrs ; props = IdMap.add field 
+	      (AttrMap.add Value newval
+		 (AttrMap.add Config (Const (CBool true))
+		    (AttrMap.add Writable (Const (CBool true))
+		       (AttrMap.add Enum (Const (CBool true))
+			  AttrMap.empty))))
+	      props };
 	  newval
 	end
       else Const CUndefined	
@@ -85,7 +85,7 @@ let rec not_writable prop =
 let rec update_field obj1 obj2 field newval args = match obj1 with
     (* 8.12.4, step 4 *)
   | Const (CNull) -> add_field obj2 field newval
-  | ObjCell c -> let (attrs, props) = !c in
+  | ObjCell c -> let { attrs ; props } = !c in
       if (not (IdMap.mem field props)) then
 	if (IdMap.mem "proto" attrs) then
 	  (* EUpdateField-Proto *)
@@ -101,9 +101,9 @@ let rec update_field obj1 obj2 field newval args = match obj1 with
 	      add_field obj2 field newval
 	    else begin
 	      (* 8.12.5, step 3 *)
-	      c := (attrs, IdMap.add field
+	      c := { attrs ; props = IdMap.add field
 		      (AttrMap.add Value newval prop)
-		      props);
+		      props };
 	      newval
 	    end
 	  else begin try
@@ -116,7 +116,7 @@ let rec update_field obj1 obj2 field newval args = match obj1 with
   | _ -> failwith ("[interp] set_field received (or found) a non-object.  The call was (set-field " ^ pretty_value obj1 ^ " " ^ pretty_value obj2 ^ " " ^ field ^ " " ^ pretty_value newval ^ ")" )
 
 let rec get_attr attr obj field = match obj, field with
-  | ObjCell c, Const (CString s) -> let (attrs, props) = !c in
+  | ObjCell c, Const (CString s) -> let { attrs ; props } = !c in
       if (not (IdMap.mem s props)) then
 	undef
       else
@@ -160,13 +160,13 @@ let is_data prop =
        b. Writable, which can change true->false
 *)
 let rec set_attr attr obj field newval = match obj, field with
-  | ObjCell c, Const (CString f_str) -> let (attrs, props) = !c in
+  | ObjCell c, Const (CString f_str) -> let { attrs ; props } = !c in
       if (not (IdMap.mem f_str props)) then
 	if (IdMap.mem "extensible" attrs) then
 	  match IdMap.find "extensible" attrs with
 	    | Const (CBool true) -> 
 		let new_prop = AttrMap.add attr newval AttrMap.empty in begin
-		    c := (attrs, IdMap.add f_str new_prop props);
+		    c := { attrs ; props = IdMap.add f_str new_prop props };
 		    newval
 		  end
 	    | _ -> failwith ("[interp] Extensible not true on object to extend with an attr")								  
@@ -201,7 +201,7 @@ let rec set_attr attr obj field newval = match obj, field with
 	      else prop
 	  | _ -> prop
 	in begin
-	    c := (attrs, IdMap.add f_str new_prop props);
+	    c := { attrs ; props = IdMap.add f_str new_prop props };
 	    newval
 	  end
   | _ -> failwith ("[interp] set-attr didn't get an object and a string")
@@ -210,7 +210,7 @@ let rec set_attr attr obj field newval = match obj, field with
    undefined..." *)
 
 and fun_obj value = match value with
-  | ObjCell c -> let (props, _) = !c in
+  | ObjCell c -> let { attrs = props ; _ } = !c in (* attrs OR props ??? *)
       if IdMap.mem "code" props then
 	match IdMap.find "code" props with
 	  | Closure _ -> true
@@ -244,8 +244,8 @@ let rec eval ({ p ; e } : prim_exp) env = match e with
       let eval_prop_attr m (name, e) = AttrMap.add name (eval e env) m in
       let eval_prop m (name, attrs) = 
 	IdMap.add name (fold_left eval_prop_attr AttrMap.empty attrs) m in
-	ObjCell (ref (fold_left eval_obj_attr IdMap.empty attrs,
-		      fold_left eval_prop IdMap.empty props))
+	ObjCell (ref { attrs = fold_left eval_obj_attr IdMap.empty attrs ;
+		       props = fold_left eval_prop IdMap.empty props })
   | EUpdateFieldSurface (obj, f, v, args) ->
       let obj_value = eval obj env in
       let f_value = eval f env in
@@ -280,12 +280,12 @@ let rec eval ({ p ; e } : prim_exp) env = match e with
       let f_val = eval f env in begin
 	match (obj_val, f_val) with
 	  | (ObjCell c, Const (CString s)) ->
-	      let (attrs,props) = !c in
+	      let { attrs ; props } = !c in
 		if IdMap.mem s props 
 		  && IdMap.mem "configurable" attrs
 		  && (IdMap.find "configurable" attrs) == Const (CBool true)
 		then begin
-		  c := (attrs, IdMap.remove s props);
+		  c := { attrs ; props = IdMap.remove s props };
 		  Const (CBool true)
 		end
 		else Const (CBool false)
@@ -381,7 +381,7 @@ with
       let err_msg = 
 	match v with
 	  | ObjCell c ->
-	      let (attrs, props) = !c in
+	      let { attrs ; props } = !c in
 		begin try
 		  let msg = IdMap.find "message" props in
 		  let msg_val = AttrMap.find Value msg in
