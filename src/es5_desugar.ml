@@ -11,7 +11,7 @@ let mk_id s =
   id_counter := !id_counter + 1;
   s ^ (string_of_int !id_counter)
 
-let rec ds expr =
+let rec ds (expr: Exprjs_syntax.expr) : Es5_syntax.src_exp =
   match expr with
     | ConstExpr (p,c) -> { p ; e = EConst c }
 	
