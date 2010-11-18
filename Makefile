@@ -1,6 +1,7 @@
 OCAMLBUILD = ocamlbuild -j 2 -classic-display
 LIB_SRC = data/es5-lib.es5
-LIB_CACHE = data/es5-lib.cache
+LIB_CACHE = data/es5-lib.cache 
+JSC_NATIVE = _build/src/jsc.native
 
 .PHONY: all jsc lib install uninstall clean gen-cache clean-cache test
 
@@ -23,8 +24,8 @@ uninstall:
 clean: clean-cache
 	$(OCAMLBUILD) -clean
 
-$(LIB_CACHE): jsc jsc.native $(LIB_SRC)
-	./jsc.native -env $(LIB_SRC) -full-desugar -env-wc $@
+$(LIB_CACHE): jsc $(LIB_SRC)
+	$(JSC_NATIVE) -env $(LIB_SRC) -full-desugar -env-wc $@
 
 gen-cache: $(LIB_CACHE)
 
