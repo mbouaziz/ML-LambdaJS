@@ -40,7 +40,7 @@ let [[args-array]] = func(alist) {
 }
 
 // Use internally to call function objects that take no arguments
-let [[call-no-args]] = func(f) { return f(undefined, {[]}) }
+let [[call-no-args]] = func(f) { return f(undefined, {[extensible:true]}) }
 
 // Simpler forms to use internally
 let [[one-arg]] = func(arg) {
