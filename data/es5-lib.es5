@@ -302,7 +302,7 @@ let [[getPrototypeOf]] = function(obj) {
 }
 
 let [[call]] = function(thisarg) {
-    return this(thisarg, args)
+    return this(thisarg, {[extensible:true]})
 }
 
 {
