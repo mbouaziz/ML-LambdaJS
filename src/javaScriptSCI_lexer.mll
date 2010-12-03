@@ -1,7 +1,7 @@
 {
 open Prelude
 open Lexing
-open JavaScript_parser
+open JavaScriptSCI_parser
 open JavaScript_syntax
 
 module S = String
@@ -11,12 +11,12 @@ let parse_re = ref false
 (* TODO: if integer conversions overflow, treat as a float *)
 let parse_num_lit (s : string) : token =
   if S.contains s 'x' || S.contains s 'X'
-    then Int (int_of_string s)
+    then TokInt (int_of_string s)
     else if S.contains s '.'
-           then Float (float_of_string s)
+           then TokFloat (float_of_string s)
            else if S.contains s 'e' || S.contains s 'E'
-                  then Float (float_of_string s)
-                  else Int (int_of_string s)
+                  then TokFloat (float_of_string s)
+                  else TokInt (int_of_string s)
 
 let mk_loc (buf : lexbuf) : pos =
   Lexing.lexeme_start_p buf, Lexing.lexeme_end_p buf
@@ -67,14 +67,13 @@ let escape_sequence
 let double_quoted_string_char = 
   [^ '\r' '\n' '"' '\\'] | ('\\' escape_sequence)
 
+let line_terminator = "\n\r" | '\n' | "\r\n" | '\r'
 
 rule token = parse
    | blank + { token lexbuf }
-   | '\n' { new_line lexbuf; token lexbuf }
-   | '\r' { new_line lexbuf; token lexbuf }
-   | "\r\n" { new_line lexbuf; token lexbuf }
+   | line_terminator { new_line lexbuf; TokLineTerminator }
    | "/*" { block_comment lexbuf }
-   | "//"[^ '\r' '\n']* [ '\r' '\n' ] { new_line lexbuf; token lexbuf }
+   | "//"[^ '\r' '\n']* line_terminator { new_line lexbuf; token lexbuf }
 
    | "/*:" { parse_re := false; comment_start_p := lexeme_start_p lexbuf;
              hint lexbuf }
@@ -82,112 +81,108 @@ rule token = parse
    (* ContinueId and BreakId are tokens for labelled break and continue.  They
     * include their target label.
     *)
-   | "continue" [ ' ' '\t' ]+ (ident as x) { parse_re := false; ContinueId x }
-   | "break" [ ' ' '\t' ]+ (ident as x) { parse_re := false; BreakId x }
+   | "continue" [ ' ' '\t' ]+ (ident as x) { parse_re := false; TokContinueId x }
+   | "break" [ ' ' '\t' ]+ (ident as x) { parse_re := false; TokBreakId x }
 
-   | '/' {if !parse_re then (parse_re := false; regexp lexbuf) else Div }
+   | '/' {if !parse_re then (parse_re := false; regexp lexbuf) else TokDiv }
 
    | '"' { parse_re := false; string_lit '"' lexbuf }
    | '\'' { parse_re := false; string_lit '\'' lexbuf }
    
    | num_lit as x {  parse_re := false; parse_num_lit x }
-   | "{" { parse_re := false; LBrace }
-   | "}" { parse_re := false; RBrace }
-   | '(' { parse_re := true; LParen }
-   | ')' {  parse_re := false; RParen }
-   | "|=" { parse_re := false; AssignOp OpAssignBOr }
-   | "^=" { parse_re := false; AssignOp OpAssignBXor }
-   | "&=" { parse_re := false; AssignOp OpAssignBAnd }
-   | "<<=" { parse_re := false; AssignOp OpAssignLShift }
-   | ">>=" { parse_re := false; AssignOp OpAssignZfRShift }
-   | ">>>=" { parse_re := false; AssignOp OpAssignSpRShift }
-   | "+=" { parse_re := false; AssignOp OpAssignAdd }
-   | "-=" { parse_re := false; AssignOp OpAssignSub }
-   | "*=" { parse_re := false; AssignOp OpAssignMul }
-   | "/=" { parse_re := false; AssignOp OpAssignDiv }
-   | "%=" { parse_re := false; AssignOp OpAssignMod }
-   | "%" { parse_re := false; Mod }
-   | "=" { parse_re := true; Assign }
-   | ";" { parse_re := false; Semi }
-   | "," { parse_re := true; Comma }
-   | "?" { parse_re := true; Ques }
-   | ":" { parse_re := true; Colon }
-   | "||" { parse_re := true; LOr }
-   | "&&" { parse_re := false; LAnd }
-   | "|" { parse_re := false; BOr }
-   | "^" { parse_re := false; BXor }
-   | "&" { parse_re := false; BAnd }
-   | "===" { parse_re := false; StrictEq }
-   | "==" { parse_re := false; AbstractEq }
-   | "!=" { parse_re := false; AbstractNEq }
-   | "!==" { parse_re := false; StrictNEq }
-   | "<<" { parse_re := false; LShift }
-   | ">>" { parse_re := false; RShift }
-   | ">>>" { parse_re := false; SpRShift }
-   | "<=" { parse_re := false; LEq }
-   | "<" { parse_re := false; LT }
-   | ">=" { parse_re := false; GEq }
-   | ">" { parse_re := false; GT }
-   | "++" { parse_re := false; PlusPlus }
-   | "--" { parse_re := false; MinusMinus }
-   | "+" { parse_re := false; Plus }
-   | "-" { parse_re := false; Minus }
-   | "*" { parse_re := false; Times }
-   | "!" { parse_re := true; Exclamation }
-   | "~" { parse_re := false; Tilde }
-   | "." { parse_re := false; Period }
-   | "[" { parse_re := false; LBrack }
-   | "]" { parse_re := false; RBrack }
+   | "{" { parse_re := false; TokLBrace }
+   | "}" { parse_re := false; TokRBrace }
+   | '(' { parse_re := true; TokLParen }
+   | ')' {  parse_re := false; TokRParen }
+   | "|=" { parse_re := false; TokAssignOp OpAssignBOr }
+   | "^=" { parse_re := false; TokAssignOp OpAssignBXor }
+   | "&=" { parse_re := false; TokAssignOp OpAssignBAnd }
+   | "<<=" { parse_re := false; TokAssignOp OpAssignLShift }
+   | ">>=" { parse_re := false; TokAssignOp OpAssignZfRShift }
+   | ">>>=" { parse_re := false; TokAssignOp OpAssignSpRShift }
+   | "+=" { parse_re := false; TokAssignOp OpAssignAdd }
+   | "-=" { parse_re := false; TokAssignOp OpAssignSub }
+   | "*=" { parse_re := false; TokAssignOp OpAssignMul }
+   | "/=" { parse_re := false; TokAssignOp OpAssignDiv }
+   | "%=" { parse_re := false; TokAssignOp OpAssignMod }
+   | "%" { parse_re := false; TokMod }
+   | "=" { parse_re := true; TokAssign }
+   | ";" { parse_re := false; TokSemi }
+   | "," { parse_re := true; TokComma }
+   | "?" { parse_re := true; TokQues }
+   | ":" { parse_re := true; TokColon }
+   | "||" { parse_re := true; TokLOr }
+   | "&&" { parse_re := false; TokLAnd }
+   | "|" { parse_re := false; TokBOr }
+   | "^" { parse_re := false; TokBXor }
+   | "&" { parse_re := false; TokBAnd }
+   | "===" { parse_re := false; TokStrictEq }
+   | "==" { parse_re := false; TokAbstractEq }
+   | "!=" { parse_re := false; TokAbstractNEq }
+   | "!==" { parse_re := false; TokStrictNEq }
+   | "<<" { parse_re := false; TokLShift }
+   | ">>" { parse_re := false; TokRShift }
+   | ">>>" { parse_re := false; TokSpRShift }
+   | "<=" { parse_re := false; TokLEq }
+   | "<" { parse_re := false; TokLT }
+   | ">=" { parse_re := false; TokGEq }
+   | ">" { parse_re := false; TokGT }
+   | "++" { parse_re := false; TokPlusPlus }
+   | "--" { parse_re := false; TokMinusMinus }
+   | "+" { parse_re := false; TokPlus }
+   | "-" { parse_re := false; TokMinus }
+   | "*" { parse_re := false; TokTimes }
+   | "!" { parse_re := true; TokExclamation }
+   | "~" { parse_re := false; TokTilde }
+   | "." { parse_re := false; TokPeriod }
+   | "[" { parse_re := false; TokLBrack }
+   | "]" { parse_re := false; TokRBrack }
 
-   | "if" { parse_re := false; If  }
-   | "else" { parse_re := false; Else  }
-   | "true" { parse_re := false; True  }
-   | "false" { parse_re := false; False  }
-   | "new" { parse_re := false; New  }
-   | "instanceof" { parse_re := false; Instanceof  }
-   | "this" { parse_re := false; This  }
-   | "null" { parse_re := false; Null  }
-   | "function" { parse_re := false; Function  }
-   | "typeof" { parse_re := false; Typeof  }
-   | "void" { parse_re := false; Void  }
-   | "delete" { parse_re := false; Delete  }
-   | "switch" { parse_re := false; Switch  }
-   | "default" { parse_re := false; Default  }
-   | "case" { parse_re := false; Case  }
-   | "while" { parse_re := false; While  }
-   | "do" { parse_re := false; Do  }
-   | "break" { parse_re := false; Break  }
-   | "var" { parse_re := false; Var  }
-   | "in" { parse_re := false; In  }
-   | "for" { parse_re := false; For  }
-   | "try" { parse_re := false; Try  }
-   | "catch" { parse_re := false; Catch  }
-   | "finally" { parse_re := false; Finally  }
-   | "throw" { parse_re := false; Throw  }
-   | "return" { parse_re := false; Return  }
-   | "with" { parse_re := false; With  }
-   | "continue" { parse_re := false; Continue  }
-   | "instanceof" { parse_re := false; Instanceof  }
-   | "get" { parse_re := false; Get }
-   | "set" { parse_re := false; Set }
-   | ident as x { parse_re := false; Id x }
-   | eof { EOF }
+   | "if" { parse_re := false; TokIf  }
+   | "else" { parse_re := false; TokElse  }
+   | "true" { parse_re := false; TokTrue  }
+   | "false" { parse_re := false; TokFalse  }
+   | "new" { parse_re := false; TokNew  }
+   | "instanceof" { parse_re := false; TokInstanceof  }
+   | "this" { parse_re := false; TokThis  }
+   | "null" { parse_re := false; TokNull  }
+   | "function" { parse_re := false; TokFunction  }
+   | "typeof" { parse_re := false; TokTypeof  }
+   | "void" { parse_re := false; TokVoid  }
+   | "delete" { parse_re := false; TokDelete  }
+   | "switch" { parse_re := false; TokSwitch  }
+   | "default" { parse_re := false; TokDefault  }
+   | "case" { parse_re := false; TokCase  }
+   | "while" { parse_re := false; TokWhile  }
+   | "do" { parse_re := false; TokDo  }
+   | "break" { parse_re := false; TokBreak  }
+   | "var" { parse_re := false; TokVar  }
+   | "in" { parse_re := false; TokIn  }
+   | "for" { parse_re := false; TokFor  }
+   | "try" { parse_re := false; TokTry  }
+   | "catch" { parse_re := false; TokCatch  }
+   | "finally" { parse_re := false; TokFinally  }
+   | "throw" { parse_re := false; TokThrow  }
+   | "return" { parse_re := false; TokReturn  }
+   | "with" { parse_re := false; TokWith  }
+   | "continue" { parse_re := false; TokContinue  }
+   | "instanceof" { parse_re := false; TokInstanceof  }
+   | "get" { parse_re := false; TokGet }
+   | "set" { parse_re := false; TokSet }
+   | ident as x { parse_re := false; TokId x }
+   | eof { TokEOF }
 
 and block_comment = parse
   | "*/" { token lexbuf }
   | '*' { block_comment lexbuf }
-  | "\r\n" { new_line lexbuf; block_comment lexbuf; }
-  | [ '\n' '\r' ]  { new_line lexbuf; block_comment lexbuf }
+  | line_terminator { new_line lexbuf; block_comment lexbuf; }
   | [^ '\n' '\r' '*'] { block_comment lexbuf }
 
 and hint = parse
   | "*/" { let str = Buffer.contents block_comment_buf in
-             Buffer.clear block_comment_buf; HINT str }
+             Buffer.clear block_comment_buf; TokHINT str }
   | '*' { Buffer.add_char block_comment_buf '*'; hint lexbuf }
-  | "\r\n" { new_line lexbuf; Buffer.add_char block_comment_buf '\n'; 
-             hint lexbuf }
-  | [ '\n' '\r' ] { new_line lexbuf; Buffer.add_char block_comment_buf '\n';
-                    hint lexbuf }
+  | line_terminator { new_line lexbuf; Buffer.add_char block_comment_buf '\n'; hint lexbuf }
   | ([^ '\n' '\r' '*'])+ as txt { Buffer.add_string block_comment_buf txt;
                                   hint lexbuf }
 
@@ -217,17 +212,17 @@ and string_lit end_ch = parse
         string_lit end_ch lexbuf }
   | _ as ch
       { if end_ch = ch then
-          String (get_string ())
+          TokString (get_string ())
         else
           (Buffer.add_char string_buf ch; 
            string_lit end_ch lexbuf)
       }
 
 and regexp = parse
-  | "/" { Regexp (get_string (), false, false) }
-  | "/mg" { Regexp (get_string (), true, false) } (* TODO: m-flag ignored *)
-  | "/gi" { Regexp (get_string (), true, true) }
-  | "/g" { Regexp (get_string (), true, false) }
-  | "/i" { Regexp (get_string (), false, true) }
+  | "/" { TokRegexp (get_string (), false, false) }
+  | "/mg" { TokRegexp (get_string (), true, false) } (* TODO: m-flag ignored *)
+  | "/gi" { TokRegexp (get_string (), true, true) }
+  | "/g" { TokRegexp (get_string (), true, false) }
+  | "/i" { TokRegexp (get_string (), false, true) }
   | '\\' (_ as ch) { Buffer.add_char string_buf ch; regexp lexbuf }
   | _ as ch { Buffer.add_char string_buf ch; regexp lexbuf }
