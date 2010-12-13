@@ -1,7 +1,7 @@
 {
 open Prelude
 open Lexing
-open JavaScriptSCI_parser
+open JavaScript_parser
 open JavaScript_syntax
 
 module S = String

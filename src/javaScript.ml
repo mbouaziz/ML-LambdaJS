@@ -2,8 +2,8 @@ open Prelude
 open JavaScript_syntax
 open Lexing
 
-module JSL = JavaScriptSCI_lexer
-module JSP = JavaScriptSCI_parser
+module JSL = JavaScript_lexer
+module JSP = JavaScript_parser
 
 let parse_javascript cin name =
   let lexbuf = Lexing.from_string cin in
