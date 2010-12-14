@@ -13,6 +13,100 @@ let rec expr_to_lvalue (e : expr) : lvalue =  match e with
   | BracketExpr (p,e1,e2) -> BracketLValue (p,e1,e2)
   | ParenExpr (_, e) -> expr_to_lvalue e
   | _ -> raise Expected_lvalue
+
+let src_elt_function = function
+  | ExprStmt (NamedFuncExpr (p, id, ids, s)) -> FuncStmt (p, id, ids, s)
+  | ExprStmt (HintExpr (p0, h, NamedFuncExpr (p1, id, ids, s))) -> HintStmt (p0, h, FuncStmt (p1, id, ids, s))
+  | x -> x
+
+let forIn_init e =
+  let no_somesome o = match o with
+  | Some (_, Some _) -> assert false (* cannot happen, by construction *)
+  | _ -> None
+  in
+  let if_somesome o f = match o with Some (x, Some y) -> let x, y = f x y in Some (x, Some y) | _ -> None in
+  let mk_p (_, e1) (_, e2) = e1, e2 in
+  let rec of_expr = function
+    | ListExpr (p, e1, e2) -> if_somesome (of_expr e1) (fun (p1, id) e1 -> (p1, id), ListExpr (mk_p p1 p, e1, e2))
+    | e -> of_assign_expr e
+  and of_assign_expr = function
+    | AssignExpr (p, op, e1, e2) -> if_somesome None (* pb here (of_lhs_expr e1) *) (fun (p1, id) e1 -> (p1, id), AssignExpr (mk_p p1 p, op, e1, e2))
+    | e -> of_cond_expr e
+  and of_cond_expr = function
+    | IfExpr (p, e1, e2, e3) -> if_somesome (of_op_expr e1) (fun (p1, id) e1 -> (p1, id), IfExpr (mk_p p1 p, e1, e2, e3))
+    | e -> of_op_expr e
+  and of_op_expr = function
+    | InfixExpr (p, op, e1, e2) ->
+	begin match of_op_expr e1, op with
+	| None, _ -> None
+	| Some ((p1, id), None), OpIn -> Some ((p1, id), Some e2)
+	| Some (_, None), _ -> None
+	| Some ((p1, id), Some e1), _ -> Some ((p1, id), Some (InfixExpr (mk_p p1 p, op, e1, e2)))
+	end
+    | e -> of_unary_expr e
+  and of_unary_expr = function
+    | UnaryAssignExpr (_, PrefixInc, _)
+    | UnaryAssignExpr (_, PrefixDec, _)
+    | PrefixExpr _ -> None
+    | e -> of_postfix_expr e
+  and of_postfix_expr = function
+    | UnaryAssignExpr (_, PostfixInc, e)
+    | UnaryAssignExpr (_, PostfixDec, e) -> None
+    | e -> of_lhs_expr e
+  and of_lhs_expr = function
+    | CallExpr (_, e1, _)
+    | BracketExpr (_, e1, _)
+    | DotExpr (_, e1, _) -> no_somesome (of_lhs_expr e1)
+    | NewExpr _ -> None
+    | e -> of_member_expr e
+  and of_member_expr = function
+    | NewExpr _
+    | FuncExpr _
+    | HintExpr _
+    | NamedFuncExpr _ -> None
+    | DotExpr (_, e, _)
+    | BracketExpr (_, e, _) -> no_somesome (of_member_expr e)
+    | e -> of_primary_expr e
+  and of_primary_expr = function
+    | ObjectExpr _
+    | ConstExpr _
+    | ArrayExpr _
+    | ParenExpr _
+    | HintExpr _
+    | ThisExpr _ -> None
+    | VarExpr (p, id) -> Some ((p, id), None)
+    | _ -> assert false
+  in of_expr e
+
+let rec expr_noin = function
+  | ThisExpr _
+  | VarExpr _
+  | ConstExpr _
+  | ArrayExpr _
+  | ObjectExpr _
+  | ParenExpr _
+  | DotExpr _
+  | BracketExpr _
+  | NewExpr _
+  | FuncExpr _
+  | NamedFuncExpr _
+  | HintExpr _
+  | CallExpr _
+  | PrefixExpr _
+  | UnaryAssignExpr _ -> true
+  | InfixExpr (_, OpIn, _, _) -> false
+  | InfixExpr (_, _, e1, e2)
+  | ListExpr (_, e1, e2) -> (expr_noin e1) && (expr_noin e2)
+  | IfExpr (_, e1, e2, e3) -> (expr_noin e1) && (expr_noin e2) && (expr_noin e3)
+  | AssignExpr (_, _, _, e) -> expr_noin e
+  | GetterExpr _
+  | SetterExpr _ -> assert false
+
+let varDecl_noin = function
+  | VarDeclNoInit _ -> true
+  | VarDecl (_, _, e) -> expr_noin e
+let varDecls_noin = List.for_all varDecl_noin
+
 %}
 
 %token <string> TokContinueId
@@ -35,12 +129,10 @@ let rec expr_to_lvalue (e : expr) : lvalue =  match e with
  TokStrictNEq TokAbstractNEq TokLShift TokRShift TokSpRShift TokLEq TokLT TokGEq TokGT TokPlusPlus TokMinusMinus
  TokPlus TokMinus TokTimes TokDiv TokMod TokExclamation TokTilde TokPeriod TokLBrack TokRBrack
 
-%token TokEOF TokLineTerminator TokNeverHappens
+%token TokEOF TokLineTerminator
 
 (* http://stackoverflow.com/questions/1737460/
    how-to-find-shift-reduce-conflict-in-this-yacc-file *)
-%nonassoc TokGreaterThanColon
-%nonassoc TokColon
 %nonassoc TokLowerThanElse
 %nonassoc TokElse
 
@@ -141,7 +233,7 @@ let rec expr_to_lvalue (e : expr) : lvalue =  match e with
 %inline tVoid: x=lT(TokVoid) {x}
 %inline tWhile: x=lT(TokWhile) {x}
 %inline tWith: x=lT(TokWith) {x}
-%inline directSemi: x=TokSemi {x}
+(* %inline directSemi: x=TokSemi {x} *)
 
 
 exprs: x=separated_list(tComma, assign_expr) {x}
@@ -153,7 +245,7 @@ ids: x=separated_list(tComma, tId) {x}
 (* How silly is this hack for dealing with get/set as keywords as well
 as get/set property names? *)
 prop:
-  | id=tId { PropId id }  %prec TokGreaterThanColon
+  | id=tId { PropId id }
   | s=tString { PropString s }
   | tGet { PropString "get" }
   | tSet { PropString "set" }
@@ -168,16 +260,12 @@ prop:
 %inline fields: x=separated_list(tComma, field) {x}
 
 %inline varDecls: x=separated_nonempty_list(tComma, varDecl) {x}
-%inline varDecls_noin: x=separated_nonempty_list(tComma, varDecl_noin) {x}
 
-%inline elision_e: tComma { ConstExpr (($startpos, $endpos), CUndefined) }
-%inline elision_opt: x=elision_e* {x}
-%inline element_list_e: a=elision_opt e=assign_expr { a @ [e] }
-%inline element_list: x=separated_nonempty_list(tComma, element_list_e) { List.flatten x }
-%inline array_content:
-  | a=elision_opt {a}
-  | a=element_list {a}
-  | a1=element_list tComma a2=elision_opt { a1 @ a2 }
+element_list_rb:
+  | tRBrack { [] }
+  | e=assign_expr tRBrack { [e] }
+  | e=assign_expr tComma el=element_list_rb { e::el }
+  | c=tComma el=element_list_rb { (ConstExpr (($startpos(c), $endpos(c)), CUndefined))::el }
 
 const:
   | tTrue { CBool true }
@@ -189,16 +277,18 @@ const:
   | f=tFloat { CNum f }
 
 primary_expr:
+  | e=primary_expr_noobj { e }
+  | tLBrace o=fields tRBrace { ObjectExpr (($startpos, $endpos), o) }
+
+primary_expr_noobj:
   | c=const { ConstExpr (($startpos, $endpos), c) }
   | id=tId { VarExpr (($startpos, $endpos), id) }
-  | tLBrack a=array_content tRBrack { ArrayExpr (($startpos, $endpos), a) }
-  | tLBrace o=fields tRBrace { ObjectExpr (($startpos, $endpos), o) }
+  | tLBrack a=element_list_rb { ArrayExpr (($startpos, $endpos), a) }
   | tLParen e=expr tRParen { ParenExpr (($startpos, $endpos), e) }
   | h=tHINT e=primary_expr { HintExpr (($startpos, $endpos), h, e) }
   | tThis { ThisExpr (($startpos, $endpos)) }
 
-member_expr:
-  | e=primary_expr { e }
+function_expr:
   | tFunction tLParen ids=ids tRParen lb=tLBrace src=src_elts rb=tRBrace
     { FuncExpr (($startpos, $endpos), ids, 
                 BlockStmt (($startpos(lb), $endpos(rb)), src)) }
@@ -210,12 +300,32 @@ member_expr:
   | tFunction id=tId tLParen ids=ids tRParen lb=tLBrace src=src_elts rb=tRBrace
       { NamedFuncExpr (($startpos, $endpos), id, ids,
                        BlockStmt (($startpos(lb), $startpos(rb)), src)) }
+  | tFunction id=tId tLParen ids=ids tRParen h=tHINT lb=tLBrace src=src_elts rb=tRBrace
+      { HintExpr
+          (($startpos(h), $endpos(h)), h,
+           NamedFuncExpr (($startpos, $endpos), id, ids,
+			  BlockStmt (($startpos(lb), $endpos(src)), src))) }
+
+member_expr:
+  | e=primary_expr { e }
+  | e=function_expr { e }
   | e=member_expr tPeriod f=tId { DotExpr (($startpos, $endpos), e, f) }
   | e=member_expr tLBrack f=expr tRBrack { BracketExpr (($startpos, $endpos), e, f) }
   | tNew c=member_expr tLParen p=exprs tRParen { NewExpr (($startpos, $endpos), c, p) }
 
+member_expr_noobj:
+  | e=primary_expr_noobj { e }
+  | e=function_expr { e }
+  | e=member_expr_noobj tPeriod f=tId { DotExpr (($startpos, $endpos), e, f) }
+  | e=member_expr_noobj tLBrack f=expr tRBrack { BracketExpr (($startpos, $endpos), e, f) }
+  | tNew c=member_expr tLParen p=exprs tRParen { NewExpr (($startpos, $endpos), c, p) }
+
 new_expr:
   | e=member_expr { e }
+  | tNew e=new_expr { NewExpr (($startpos, $endpos), e, []) }
+
+new_expr_noobj:
+  | e=member_expr_noobj { e }
   | tNew e=new_expr { NewExpr (($startpos, $endpos), e, []) }
 
 
@@ -225,13 +335,25 @@ call_expr:
   | e1=call_expr tLBrack e2=expr tRBrack { BracketExpr (($startpos, $endpos), e1, e2) }
   | e=call_expr tPeriod id=tId { DotExpr (($startpos, $endpos), e, id) }
 
+call_expr_noobj:
+  | e1=member_expr_noobj tLParen e2=exprs tRParen { CallExpr (($startpos, $endpos), e1, e2) }
+  | e1=call_expr_noobj tLParen e2=exprs tRParen { CallExpr (($startpos, $endpos), e1, e2) }
+  | e1=call_expr_noobj tLBrack e2=expr tRBrack { BracketExpr (($startpos, $endpos), e1, e2) }
+  | e=call_expr_noobj tPeriod id=tId { DotExpr (($startpos, $endpos), e, id) }
+
 lhs_expr: e=new_expr | e=call_expr { e }
+
+lhs_expr_noobj: e=new_expr_noobj | e=call_expr_noobj { e }
 
 %inline postfix_op: tPlusPlus { PostfixInc } | tMinusMinus { PostfixDec }
 
 postfix_expr:
   | e=lhs_expr { e }
   | e=lhs_expr op=postfix_op { UnaryAssignExpr (($startpos, $endpos), op, expr_to_lvalue e) }
+
+postfix_expr_noobj:
+  | e=lhs_expr_noobj { e }
+  | e=lhs_expr_noobj op=postfix_op { UnaryAssignExpr (($startpos, $endpos), op, expr_to_lvalue e) }
 
 %inline lprefix_op: tPlusPlus { PrefixInc } | tMinusMinus { PrefixDec }
 
@@ -249,6 +371,11 @@ unary_expr:
   | op=lprefix_op e=unary_expr { UnaryAssignExpr (($startpos, $endpos), op, expr_to_lvalue e) }
   | op=prefix_op e=unary_expr { PrefixExpr (($startpos, $endpos), op, e) }
 
+unary_expr_noobj:
+  | e=postfix_expr_noobj { e }
+  | op=lprefix_op e=unary_expr { UnaryAssignExpr (($startpos, $endpos), op, expr_to_lvalue e) }
+  | op=prefix_op e=unary_expr { PrefixExpr (($startpos, $endpos), op, e) }
+
 %inline infix_op:
   | tDiv { OpDiv }
   | tLShift { OpLShift }
@@ -258,22 +385,12 @@ unary_expr:
   | tRShift { OpZfRShift }
   | tSpRShift { OpSpRShift }
   | tTimes { OpMul }
-(* Combines UnaryExpression, MultiplicativeExpression, AdditiveExpression, and
-   ShiftExpression by using precedence and associativity rules. *)
-op_expr:
-  | e=unary_expr { e }
-  | e1=op_expr op=infix_op e2=op_expr
-    { InfixExpr (($startpos, $endpos), op, e1, e2) }
-
-(* ion stands for in or noin *)
-
-%inline infix_ion(inop):
   | tLT { OpLT }
   | tGT { OpGT }
   | tLEq { OpLEq }
   | tGEq { OpGEq }
   | tInstanceof { OpInstanceof }
-  | inop { OpIn }
+  | tIn { OpIn }
   | tStrictEq { OpStrictEq }
   | tStrictNEq { OpStrictNEq }
   | tAbstractEq { OpEq }
@@ -283,41 +400,47 @@ op_expr:
   | tBOr { OpBOr }
   | tLAnd { OpLAnd }
   | tLOr { OpLOr }
+(* Combines UnaryExpression, MultiplicativeExpression, AdditiveExpression, and
+   ShiftExpression by using precedence and associativity rules. *)
+op_expr:
+  | e=unary_expr { e }
+  | e1=op_expr op=infix_op e2=op_expr { InfixExpr (($startpos, $endpos), op, e1, e2) }
 
-ion_expr(inop):
+op_expr_noobj:
+  | e=unary_expr_noobj { e }
+  | e1=op_expr_noobj op=infix_op e2=op_expr { InfixExpr (($startpos, $endpos), op, e1, e2) }
+
+cond_expr:
   | e=op_expr { e }
-  | e1=ion_expr(inop) op=infix_ion(inop) e2=ion_expr(inop)
-    { InfixExpr (($startpos, $endpos), op, e1, e2) }
+  | e1=op_expr tQues e2=assign_expr tColon e3=assign_expr { IfExpr (($startpos, $endpos), e1, e2, e3) }
 
-ion_cond_expr(inop):
-  | e=ion_expr(inop) { e }
-  | e1=ion_expr(inop) tQues e2=ion_assign_expr(inop) tColon e3=ion_assign_expr(inop)
-      { IfExpr (($startpos, $endpos), e1, e2, e3) }
+cond_expr_noobj:
+  | e=op_expr_noobj { e }
+  | e1=op_expr_noobj tQues e2=assign_expr tColon e3=assign_expr { IfExpr (($startpos, $endpos), e1, e2, e3) }
 
-
-ion_assign_expr(inop):
-  | e=ion_cond_expr(inop) { e }
+assign_expr:
+  | e=cond_expr { e }
   (* we need the use Assign (token for =) in other productions. *)
-  | e1=lhs_expr op=tAssignOp e2=ion_assign_expr(inop)
-    { AssignExpr (($startpos, $endpos), op, expr_to_lvalue e1, e2) }
-  | e1=lhs_expr tAssign e2=ion_assign_expr(inop)
-    { AssignExpr (($startpos, $endpos), OpAssign, expr_to_lvalue e1, e2) }
+  | e1=lhs_expr op=tAssignOp e2=assign_expr { AssignExpr (($startpos, $endpos), op, expr_to_lvalue e1, e2) }
+  | e1=lhs_expr tAssign e2=assign_expr { AssignExpr (($startpos, $endpos), OpAssign, expr_to_lvalue e1, e2) }
 
-%inline assign_expr: e=ion_assign_expr(tIn) {e}
+assign_expr_noobj:
+  | e=cond_expr_noobj { e }
+  (* we need the use Assign (token for =) in other productions. *)
+  | e1=lhs_expr_noobj op=tAssignOp e2=assign_expr { AssignExpr (($startpos, $endpos), op, expr_to_lvalue e1, e2) }
+  | e1=lhs_expr_noobj tAssign e2=assign_expr { AssignExpr (($startpos, $endpos), OpAssign, expr_to_lvalue e1, e2) }
 
-ion_expr_expr(inop):
-  | e=ion_assign_expr(inop) { e }
-  | e1=ion_expr_expr(inop) tComma e2=ion_assign_expr(inop) { ListExpr (($startpos, $endpos), e1, e2) }
+expr:
+  | e=assign_expr { e }
+  | e1=expr tComma e2=assign_expr { ListExpr (($startpos, $endpos), e1, e2) }
 
-%inline expr: e=ion_expr_expr(tIn) {e}
-%inline expr_noin: e=ion_expr_expr(TokNeverHappens) {e}
+expr_noobj:
+  | e=assign_expr_noobj { e }
+  | e1=expr_noobj tComma e2=assign_expr { ListExpr (($startpos, $endpos), e1, e2) }
 
-%inline ion_varDecl(inop):
+%inline varDecl:
   | id=tId { VarDeclNoInit (($startpos, $endpos), id) }
-  | id=tId tAssign e=ion_assign_expr(inop) { VarDecl (($startpos, $endpos), id, e) }
-
-varDecl: x=ion_varDecl(tIn) {x}
-varDecl_noin: x=ion_varDecl(TokNeverHappens) {x}
+  | id=tId tAssign e=assign_expr { VarDecl (($startpos, $endpos), id, e) }
 
 case:
   | tCase e=expr tColon s=stmts 
@@ -325,14 +448,29 @@ case:
   | tDefault tColon s=stmts
       { CaseDefault (($startpos, $endpos), BlockStmt (($startpos, $endpos), s)) }
 
-forInInit:
-  | id=tId { NoVarForInInit (($startpos, $endpos), id) }
-  | tVar id=tId { VarForInInit (($startpos, $endpos), id) }
+for_clauses: tSemi e2=opt_expr tSemi e3=opt_expr { e2, e3 }
 
-forInit:
-  | { NoForInit }
-  | tVar vd=varDecls_noin { VarForInit vd }
-  | e=expr_noin { ExprForInit e }
+for_inpar:
+  | v=tVar id=tId tIn e=expr { fun p s -> ForInStmt (p, VarForInInit (($startpos(v), $endpos(id)), id), e, s) }
+  | tVar vd=varDecls tSemi e2=opt_expr tSemi e3=opt_expr {
+      if varDecls_noin vd then
+	fun p s -> ForStmt (p, VarForInit vd, e2, e3, s)
+      else
+	raise (Parse_failure "\"in\" in initializer of for(;;)")
+    }
+  | e1=expr f=for_clauses? {
+      match f with
+      | Some (e2, e3) ->
+	  if expr_noin e1 then
+	    fun p s -> ForStmt (p, ExprForInit e1, e2, e3, s)
+	  else
+	    raise (Parse_failure "\"in\" in initializer of for(;;)")
+      | None ->
+	  match forIn_init e1 with
+	  | Some ((p0, id), Some e) ->
+	      (fun p s -> ForInStmt (p, NoVarForInInit (p0, id), e, s))
+	  | _ -> raise (Parse_failure "No \"in\" in initializer of for-in")
+    }
 
 catch: tCatch tLParen id=tId tRParen b=block { CatchClause (($startpos, $endpos), id, b) }
 
@@ -347,7 +485,7 @@ opt_expr:
 stmt:
   | b=block { b }
   | tSemi { EmptyStmt (($startpos, $endpos)) }
-  | e=expr tSemi { ExprStmt e }
+  | e=expr_noobj tSemi { ExprStmt e }
   | tContinue tSemi { ContinueStmt (($startpos, $endpos)) }
   | id=tContinueId tSemi { ContinueToStmt (($startpos, $endpos), id) }
   | tIf e=p_expr s=stmt  %prec TokLowerThanElse { IfSingleStmt (($startpos, $endpos), e, s) }
@@ -362,8 +500,7 @@ stmt:
   | tBreak tSemi { BreakStmt (($startpos, $endpos)) }
   | id=tBreakId tSemi { BreakToStmt (($startpos, $endpos), id) }
   | id=tId tColon s=stmt { LabelledStmt (($startpos, $endpos), id, s) }
-  | tFor tLParen e1=forInInit tIn e2=expr tRParen s=stmt { ForInStmt (($startpos, $endpos), e1, e2, s) }
-  | tFor tLParen e1=forInit tSemi e2=opt_expr tSemi e3=opt_expr tRParen s=stmt { ForStmt (($startpos, $endpos), e1, e2, e3, s) }
+  | tFor tLParen f=for_inpar tRParen s=stmt { f ($startpos, $endpos) s }
   | tTry b=block c=catches { TryStmt (($startpos, $endpos), b, c, EmptyStmt (($startpos, $endpos))) }
   | tTry b=block c=catches tFinally f=block { TryStmt (($startpos, $endpos), b, c, f) }
   | tThrow e=expr tSemi { ThrowStmt (($startpos, $endpos), e) }
@@ -371,17 +508,7 @@ stmt:
   | tVar vd=varDecls tSemi { VarDeclStmt (($startpos, $endpos), vd) }
   | tWith e=p_expr s=stmt { WithStmt (e, s) }
 
-src_elt_block: x=delimited(tLBrace, src_elts, tRBrace) { BlockStmt (($startpos, $endpos), x) }
- 
-src_elts: x=src_elt* {x}
-
-src_elt:
-  | s=stmt { s }
-  | tFunction id=tId tLParen ids=ids tRParen s=src_elt_block
-    { FuncStmt (($startpos, $endpos), id, ids, s) } 
-  | tFunction id=tId tLParen ids=ids tRParen h=tHINT s=src_elt_block
-    { HintStmt (($startpos(h), $endpos(h)), h,
-                FuncStmt (($startpos, $endpos), id, ids, s)) } 
+src_elts: sl=stmt* { List.map src_elt_function sl }
 
 program : TokLineTerminator* s=src_elts TokEOF { Prog (($startpos, $endpos), s) }
 
