@@ -133,7 +133,7 @@ let varDecls_noin = List.for_all varDecl_noin
 
 (* http://stackoverflow.com/questions/1737460/
    how-to-find-shift-reduce-conflict-in-this-yacc-file *)
-%nonassoc TokLowerThanElse
+%nonassoc PrecLowerThanElse
 %nonassoc TokElse
 
 %left TokLOr
@@ -144,9 +144,15 @@ let varDecls_noin = List.for_all varDecl_noin
 %left TokStrictEq TokStrictNEq TokAbstractEq TokAbstractNEq
 %left TokLT TokLEq TokGT TokGEq TokIn TokInstanceof
 %left TokLShift TokRShift TokSpRShift
+%nonassoc PrecLowerThanInprefix
 %left TokPlus TokMinus
 %left TokTimes TokDiv TokMod
 
+%nonassoc PrecLowerThanPostfix
+%left TokPlusPlus TokMinusMinus
+
+%nonassoc PrecLowerThanSemi
+%nonassoc TokSemi
 
 %start program
 %start expression
@@ -212,7 +218,7 @@ let varDecls_noin = List.for_all varDecl_noin
 %inline tRBrace: x=lT(TokRBrace) {x}
 %inline tRBrack: x=lT(TokRBrack) {x}
 %inline tRegexp: x=lT(TokRegexp) {x}
-%inline tReturn: x=lT(TokReturn) {x}
+(* %inline tReturn: x=lT(TokReturn) {x} *)
 %inline tRParen: x=lT(TokRParen) {x}
 %inline tRShift: x=lT(TokRShift) {x}
 %inline tSemi: x=lT(TokSemi) {x}
@@ -223,7 +229,7 @@ let varDecls_noin = List.for_all varDecl_noin
 %inline tString: x=lT(TokString) {x}
 %inline tSwitch: x=lT(TokSwitch) {x}
 %inline tThis: x=lT(TokThis) {x}
-%inline tThrow: x=lT(TokThrow) {x}
+(* %inline tThrow: x=lT(TokThrow) {x} *)
 %inline tTilde: x=lT(TokTilde) {x}
 %inline tTimes: x=lT(TokTimes) {x}
 %inline tTrue: x=lT(TokTrue) {x}
@@ -237,9 +243,7 @@ let varDecls_noin = List.for_all varDecl_noin
 
 
 exprs: x=separated_list(tComma, assign_expr) {x}
-stmts: x=list(stmt) {x}
 cases: x=list(case) {x}
-catches: x=list(catch) {x}
 ids: x=separated_list(tComma, tId) {x}
 
 (* How silly is this hack for dealing with get/set as keywords as well
@@ -250,12 +254,10 @@ prop:
   | tGet { PropString "get" }
   | tSet { PropString "set" }
 
-%inline ublock: s=delimited(tLBrace, stmt, tRBrace) {s}
-
 %inline field:
   | p=prop tColon e=expr { (($startpos(p), $startpos(e)), p, e) }
-  | tGet p=prop tLParen tRParen b=ublock { (($startpos, $endpos), p, GetterExpr (($startpos, $endpos), b)) }
-  | tSet p=prop tLParen id=tId tRParen b=ublock { (($startpos, $endpos), p, SetterExpr (($startpos, $endpos), id, b)) }
+  | tGet p=prop tLParen tRParen b=block { (($startpos, $endpos), p, GetterExpr (($startpos, $endpos), b)) }
+  | tSet p=prop tLParen id=tId tRParen b=block { (($startpos, $endpos), p, SetterExpr (($startpos, $endpos), id, b)) }
 
 %inline fields: x=separated_list(tComma, field) {x}
 
@@ -277,14 +279,14 @@ const:
   | f=tFloat { CNum f }
 
 primary_expr:
-  | e=primary_expr_noobj { e }
+  | e=primary_expr_top { e }
   | tLBrace o=fields tRBrace { ObjectExpr (($startpos, $endpos), o) }
-
-primary_expr_noobj:
-  | c=const { ConstExpr (($startpos, $endpos), c) }
-  | id=tId { VarExpr (($startpos, $endpos), id) }
   | tLBrack a=element_list_rb { ArrayExpr (($startpos, $endpos), a) }
   | tLParen e=expr tRParen { ParenExpr (($startpos, $endpos), e) }
+
+primary_expr_top:
+  | c=const { ConstExpr (($startpos, $endpos), c) }
+  | id=tId { VarExpr (($startpos, $endpos), id) }
   | h=tHINT e=primary_expr { HintExpr (($startpos, $endpos), h, e) }
   | tThis { ThisExpr (($startpos, $endpos)) }
 
@@ -313,19 +315,19 @@ member_expr:
   | e=member_expr tLBrack f=expr tRBrack { BracketExpr (($startpos, $endpos), e, f) }
   | tNew c=member_expr tLParen p=exprs tRParen { NewExpr (($startpos, $endpos), c, p) }
 
-member_expr_noobj:
-  | e=primary_expr_noobj { e }
+member_expr_top:
+  | e=primary_expr_top { e }
   | e=function_expr { e }
-  | e=member_expr_noobj tPeriod f=tId { DotExpr (($startpos, $endpos), e, f) }
-  | e=member_expr_noobj tLBrack f=expr tRBrack { BracketExpr (($startpos, $endpos), e, f) }
+  | e=member_expr_top tPeriod f=tId { DotExpr (($startpos, $endpos), e, f) }
+  | e=member_expr_top tLBrack f=expr tRBrack { BracketExpr (($startpos, $endpos), e, f) }
   | tNew c=member_expr tLParen p=exprs tRParen { NewExpr (($startpos, $endpos), c, p) }
 
 new_expr:
   | e=member_expr { e }
   | tNew e=new_expr { NewExpr (($startpos, $endpos), e, []) }
 
-new_expr_noobj:
-  | e=member_expr_noobj { e }
+new_expr_top:
+  | e=member_expr_top { e }
   | tNew e=new_expr { NewExpr (($startpos, $endpos), e, []) }
 
 
@@ -335,25 +337,25 @@ call_expr:
   | e1=call_expr tLBrack e2=expr tRBrack { BracketExpr (($startpos, $endpos), e1, e2) }
   | e=call_expr tPeriod id=tId { DotExpr (($startpos, $endpos), e, id) }
 
-call_expr_noobj:
-  | e1=member_expr_noobj tLParen e2=exprs tRParen { CallExpr (($startpos, $endpos), e1, e2) }
-  | e1=call_expr_noobj tLParen e2=exprs tRParen { CallExpr (($startpos, $endpos), e1, e2) }
-  | e1=call_expr_noobj tLBrack e2=expr tRBrack { BracketExpr (($startpos, $endpos), e1, e2) }
-  | e=call_expr_noobj tPeriod id=tId { DotExpr (($startpos, $endpos), e, id) }
+call_expr_top:
+  | e1=member_expr_top tLParen e2=exprs tRParen { CallExpr (($startpos, $endpos), e1, e2) }
+  | e1=call_expr_top tLParen e2=exprs tRParen { CallExpr (($startpos, $endpos), e1, e2) }
+  | e1=call_expr_top tLBrack e2=expr tRBrack { BracketExpr (($startpos, $endpos), e1, e2) }
+  | e=call_expr_top tPeriod id=tId { DotExpr (($startpos, $endpos), e, id) }
 
 lhs_expr: e=new_expr | e=call_expr { e }
 
-lhs_expr_noobj: e=new_expr_noobj | e=call_expr_noobj { e }
+lhs_expr_top: e=new_expr_top | e=call_expr_top { e }
 
 %inline postfix_op: tPlusPlus { PostfixInc } | tMinusMinus { PostfixDec }
 
 postfix_expr:
-  | e=lhs_expr { e }
+  | e=lhs_expr %prec PrecLowerThanPostfix { e }
   | e=lhs_expr op=postfix_op { UnaryAssignExpr (($startpos, $endpos), op, expr_to_lvalue e) }
 
-postfix_expr_noobj:
-  | e=lhs_expr_noobj { e }
-  | e=lhs_expr_noobj op=postfix_op { UnaryAssignExpr (($startpos, $endpos), op, expr_to_lvalue e) }
+postfix_expr_top:
+  | e=lhs_expr_top %prec PrecLowerThanPostfix { e }
+  | e=lhs_expr_top op=postfix_op { UnaryAssignExpr (($startpos, $endpos), op, expr_to_lvalue e) }
 
 %inline lprefix_op: tPlusPlus { PrefixInc } | tMinusMinus { PrefixDec }
 
@@ -371,8 +373,8 @@ unary_expr:
   | op=lprefix_op e=unary_expr { UnaryAssignExpr (($startpos, $endpos), op, expr_to_lvalue e) }
   | op=prefix_op e=unary_expr { PrefixExpr (($startpos, $endpos), op, e) }
 
-unary_expr_noobj:
-  | e=postfix_expr_noobj { e }
+unary_expr_top:
+  | e=postfix_expr_top { e }
   | op=lprefix_op e=unary_expr { UnaryAssignExpr (($startpos, $endpos), op, expr_to_lvalue e) }
   | op=prefix_op e=unary_expr { PrefixExpr (($startpos, $endpos), op, e) }
 
@@ -406,17 +408,17 @@ op_expr:
   | e=unary_expr { e }
   | e1=op_expr op=infix_op e2=op_expr { InfixExpr (($startpos, $endpos), op, e1, e2) }
 
-op_expr_noobj:
-  | e=unary_expr_noobj { e }
-  | e1=op_expr_noobj op=infix_op e2=op_expr { InfixExpr (($startpos, $endpos), op, e1, e2) }
+op_expr_top:
+  | e=unary_expr_top { e }
+  | e1=op_expr_top op=infix_op e2=op_expr { InfixExpr (($startpos, $endpos), op, e1, e2) }
 
 cond_expr:
-  | e=op_expr { e }
+  | e=op_expr %prec PrecLowerThanInprefix { e }
   | e1=op_expr tQues e2=assign_expr tColon e3=assign_expr { IfExpr (($startpos, $endpos), e1, e2, e3) }
 
-cond_expr_noobj:
-  | e=op_expr_noobj { e }
-  | e1=op_expr_noobj tQues e2=assign_expr tColon e3=assign_expr { IfExpr (($startpos, $endpos), e1, e2, e3) }
+cond_expr_top:
+  | e=op_expr_top %prec PrecLowerThanInprefix { e }
+  | e1=op_expr_top tQues e2=assign_expr tColon e3=assign_expr { IfExpr (($startpos, $endpos), e1, e2, e3) }
 
 assign_expr:
   | e=cond_expr { e }
@@ -424,19 +426,19 @@ assign_expr:
   | e1=lhs_expr op=tAssignOp e2=assign_expr { AssignExpr (($startpos, $endpos), op, expr_to_lvalue e1, e2) }
   | e1=lhs_expr tAssign e2=assign_expr { AssignExpr (($startpos, $endpos), OpAssign, expr_to_lvalue e1, e2) }
 
-assign_expr_noobj:
-  | e=cond_expr_noobj { e }
+assign_expr_top:
+  | e=cond_expr_top { e }
   (* we need the use Assign (token for =) in other productions. *)
-  | e1=lhs_expr_noobj op=tAssignOp e2=assign_expr { AssignExpr (($startpos, $endpos), op, expr_to_lvalue e1, e2) }
-  | e1=lhs_expr_noobj tAssign e2=assign_expr { AssignExpr (($startpos, $endpos), OpAssign, expr_to_lvalue e1, e2) }
+  | e1=lhs_expr_top op=tAssignOp e2=assign_expr { AssignExpr (($startpos, $endpos), op, expr_to_lvalue e1, e2) }
+  | e1=lhs_expr_top tAssign e2=assign_expr { AssignExpr (($startpos, $endpos), OpAssign, expr_to_lvalue e1, e2) }
 
 expr:
   | e=assign_expr { e }
   | e1=expr tComma e2=assign_expr { ListExpr (($startpos, $endpos), e1, e2) }
 
-expr_noobj:
-  | e=assign_expr_noobj { e }
-  | e1=expr_noobj tComma e2=assign_expr { ListExpr (($startpos, $endpos), e1, e2) }
+expr_top:
+  | e=assign_expr_top { e }
+  | e1=expr_top tComma e2=assign_expr { ListExpr (($startpos, $endpos), e1, e2) }
 
 %inline varDecl:
   | id=tId { VarDeclNoInit (($startpos, $endpos), id) }
@@ -482,33 +484,54 @@ opt_expr:
   | { ConstExpr (($startpos, $endpos), CUndefined) }
   | e=expr { e }
 
-stmt:
-  | b=block { b }
-  | tSemi { EmptyStmt (($startpos, $endpos)) }
-  | e=expr_noobj tSemi { ExprStmt e }
-  | tContinue tSemi { ContinueStmt (($startpos, $endpos)) }
-  | id=tContinueId tSemi { ContinueToStmt (($startpos, $endpos), id) }
-  | tIf e=p_expr s=stmt  %prec TokLowerThanElse { IfSingleStmt (($startpos, $endpos), e, s) }
-  | tIf e=p_expr s1=stmt tElse s2=stmt { IfStmt (($startpos, $endpos), e, s1, s2) }
-
-  | tSwitch e=paren_expr tLBrace c=cases tRBrace
-      { SwitchStmt (($startpos, $endpos), e, c) }
-  | tWhile e=paren_expr s=stmt
-      { WhileStmt (($startpos, $endpos), e, s) }
-  | tDo b=block tWhile e=paren_expr tSemi
+stmt_nosemi:
+  | tContinue { ContinueStmt (($startpos, $endpos)) }
+  | id=tContinueId { ContinueToStmt (($startpos, $endpos), id) }
+  | tDo b=block tWhile e=paren_expr
       { DoWhileStmt (($startpos, $endpos), b, e) }
-  | tBreak tSemi { BreakStmt (($startpos, $endpos)) }
-  | id=tBreakId tSemi { BreakToStmt (($startpos, $endpos), id) }
-  | id=tId tColon s=stmt { LabelledStmt (($startpos, $endpos), id, s) }
-  | tFor tLParen f=for_inpar tRParen s=stmt { f ($startpos, $endpos) s }
-  | tTry b=block c=catches { TryStmt (($startpos, $endpos), b, c, EmptyStmt (($startpos, $endpos))) }
-  | tTry b=block c=catches tFinally f=block { TryStmt (($startpos, $endpos), b, c, f) }
-  | tThrow e=expr tSemi { ThrowStmt (($startpos, $endpos), e) }
-  | tReturn e=opt_expr tSemi { ReturnStmt (($startpos, $endpos), e) }
-  | tVar vd=varDecls tSemi { VarDeclStmt (($startpos, $endpos), vd) }
-  | tWith e=p_expr s=stmt { WithStmt (e, s) }
+  | tBreak { BreakStmt (($startpos, $endpos)) }
+  | id=tBreakId { BreakToStmt (($startpos, $endpos), id) }
 
-src_elts: sl=stmt* { List.map src_elt_function sl }
+stmt_semi:
+  | e=expr_top { ExprStmt e }
+  | TokThrow e=expr { ThrowStmt (($startpos, $endpos), e) }
+  | TokReturn TokLineTerminator+ { ReturnStmt (($startpos, $endpos), ConstExpr (($endpos, $endpos), CUndefined)) }
+  | TokReturn e=expr { ReturnStmt (($startpos, $endpos), e) }
+  | tVar vd=varDecls { VarDeclStmt (($startpos, $endpos), vd) }
+  | id=TokId tColon s=stmt { LabelledStmt (($startpos, $endpos), id, s) }
+
+stmt_empty:  tSemi { EmptyStmt (($startpos, $endpos)) }
+
+stmt0:
+  | b=block { b }
+  | tIf e=p_expr s=stmt %prec PrecLowerThanElse { IfSingleStmt (($startpos, $endpos), e, s) }
+  | tIf e=p_expr s1=stmt tElse s2=stmt { IfStmt (($startpos, $endpos), e, s1, s2) }
+  | tSwitch e=paren_expr tLBrace c=cases tRBrace { SwitchStmt (($startpos, $endpos), e, c) }
+  | tWhile e=paren_expr s=stmt { WhileStmt (($startpos, $endpos), e, s) }
+  | tFor tLParen f=for_inpar tRParen s=stmt { f ($startpos, $endpos) s }
+  | tTry b=block c=catch* { TryStmt (($startpos, $endpos), b, c, EmptyStmt (($startpos, $endpos))) }
+  | tTry b=block c=catch* tFinally f=block { TryStmt (($startpos, $endpos), b, c, f) }
+  | tWith e=p_expr s=stmt { WithStmt (e, s) }
+  | s=stmt_nosemi tSemi { s }
+  | s=stmt_nosemi %prec PrecLowerThanSemi { s }
+
+stmt:
+  | s=stmt_empty
+  | s=stmt0
+  | s=stmt_semi tSemi
+  | s=stmt_semi %prec PrecLowerThanSemi { s }
+
+stmts_no_empty: (* do not start by tSemi *)
+  | { [] }
+  | s=stmt0 sl=stmts
+  | s=stmt_semi tSemi sl=stmts
+  | s=stmt_semi sl=stmts_no_empty { s::sl }
+
+stmts:
+  | tSemi sl=stmts
+  | sl=stmts_no_empty { sl }
+
+src_elts: sl=stmts { List.map src_elt_function sl }
 
 program : TokLineTerminator* s=src_elts TokEOF { Prog (($startpos, $endpos), s) }
 
