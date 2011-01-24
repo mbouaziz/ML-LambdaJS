@@ -310,10 +310,12 @@ let rec ds_op ({ p ; e } : src_exp) : prim_exp = match e with
     | ">>>" -> uint_uint p op e1 e2
     | "<" -> { p ; e = EOp2 (`Prim2 "<", ds_op e1, ds_op e2) }
     | ">" -> { p ; e = EOp2 (`Prim2 ">", ds_op e1, ds_op e2) }
-    | ">=" -> { p ; e = EIf ({ p ; e = EOp2 (`Prim2 "<", ds_op e1, ds_op e2) },
-			     false_c p, true_c p) }
-    | "<=" -> { p ; e = EIf ({ p ; e = EOp2 (`Prim2 ">", ds_op e1, ds_op e2) },
-			     false_c p, true_c p) }
+    | "<=" -> { p ; e = EOp2 (`Prim2 "<=", ds_op e1, ds_op e2) }
+    | ">=" -> { p ; e = EOp2 (`Prim2 ">=", ds_op e1, ds_op e2) }
+    (* | ">=" -> { p ; e = EIf ({ p ; e = EOp2 (`Prim2 "<", ds_op e1, ds_op e2) }, *)
+    (* 			     false_c p, true_c p) } *)
+    (* | "<=" -> { p ; e = EIf ({ p ; e = EOp2 (`Prim2 ">", ds_op e1, ds_op e2) }, *)
+    (* 			     false_c p, true_c p) } *)
     | "instanceof" -> { p ; e = EApp ({ p ; e = EId "[[instanceof]]" },
 				      [ ds_op e1; ds_op e2]) }
     | "in" -> { p ; e = EApp ({ p ; e = EId "[[in]]" },
