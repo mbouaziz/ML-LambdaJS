@@ -153,7 +153,7 @@ let rec ds (expr: Exprjs_syntax.expr) : Es5_syntax.src_exp =
 			    ds check,
 			    { p ; e = ESeq (
 				body_exp,
-				{ p ; e = EApp ({ p ; e = EId "$check" }, []) })},
+				{ p ; e = EApp ({ p ; e = EId "$check" }, []) }) },
 			    { p ; e = EConst S.CUndefined }) }) }) },
 		{ p ; e = EApp ({ p ; e = EId "$check" }, []) }) }) }
 
@@ -276,9 +276,10 @@ let rec ds_op ({ p ; e } : src_exp) : prim_exp = match e with
 	| _ -> { p ; e = ESeq (ds_op e, true_c p) }
 	end
     | "prefix:!" ->
-	{ p ; e = EIf ({ p ; e = EOp1 (`Prim1 "prim->bool", ds_op e) },
-		       false_c p,
-		       true_c p) }
+	{ p ; e = EOp1 (`Prim1 "bool!", { p ; e = EOp1 (`Prim1 "prim->bool", ds_op e) }) }
+	(* { p ; e = EIf ({ p ; e = EOp1 (`Prim1 "prim->bool", ds_op e) }, *)
+	(* 	       false_c p, *)
+	(* 	       true_c p) } *)
     | "prefix:~" ->
 	{ p ; e = EOp1 (`Prim1 "~",
 			{ p ; e = EApp ({ p ; e = EId "[[toInt]]" }, [ ds_op e ]) }) }
@@ -322,11 +323,13 @@ let rec ds_op ({ p ; e } : src_exp) : prim_exp = match e with
 			      [ ds_op e1; ds_op e2]) }
 	(* The equality operators are implemented in \JS *)
     | "==" -> { p ; e = EOp2 (`Prim2 "abs=", ds_op e1, ds_op e2) }
-    | "!=" -> { p ; e = EIf ({ p ; e = EOp2 (`Prim2 "==", ds_op e1, ds_op e2) },
-			     false_c p, true_c p) }
+    | "!=" -> { p ; e = EOp1 (`Prim1 "bool!", { p ; e = EOp2 (`Prim2 "abs=", ds_op e1, ds_op e2) }) }
+	(* { p ; e = EIf ({ p ; e = EOp2 (`Prim2 "==", ds_op e1, ds_op e2) }, *)
+	(* 		     false_c p, true_c p) } *)
     | "===" -> { p ; e = EOp2 (`Prim2 "stx=", ds_op e1, ds_op e2) }
-    | "!==" -> { p ; e = EIf ({ p ; e = EOp2 (`Prim2 "stx=", ds_op e1, ds_op e2) },
-			      false_c p, true_c p) }
+    | "!==" -> { p ; e = EOp1 (`Prim1 "bool!", { p ; e = EOp2 (`Prim2 "stx=", ds_op e1, ds_op e2) }) }
+(* { p ; e = EIf ({ p ; e = EOp2 (`Prim2 "stx=", ds_op e1, ds_op e2) }, *)
+(* 			      false_c p, true_c p) } *)
 	(* 11.11 *)
     | "&&" -> { p ; e = ELet ("$lAnd", ds_op e1,
 			      { p ; e = EIf ({ p ; e = EApp ({ p ; e = EId "[[toBoolean]]" },

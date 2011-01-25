@@ -25,6 +25,10 @@ let to_float v = match v with
   | Const (CNum x) -> x
   | _ -> raise (Throw (str ("expected number, got " ^ pretty_value v)))
 
+let bool_neg v = match v with
+  | Const (CBool b) -> Const (CBool (not b))
+  | _ -> failwith "negation of non-boolean"
+
 let typeof v = str begin match v with
   | Const c -> begin match c with
       | CUndefined -> "undefined"
@@ -232,6 +236,7 @@ let fail v = match v with
   | _ -> Const (CBool false)
 
 let op1 op = match op with
+  | "bool!" -> bool_neg
   | "typeof" -> typeof
   | "surface-typeof" -> surface_typeof
   | "primitive?" -> is_primitive
