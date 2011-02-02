@@ -165,14 +165,14 @@ let rec get_property_names obj = match obj with
 	| ObjCell o' ->
 	    let { attrs ; props } = !o' in
 	      IdMap.fold (fun k v s -> 
-			    if enum v then IdSet.add k s else s) props set
+			    if v.enum then IdSet.add k s else s) props set
 	| _ -> set (* non-object prototypes don't contribute *) 
       end in
       let name_set = List.fold_right folder protos IdSet.empty in
       let name_list= IdSet.elements name_set in
       let prop_folder num name props = 
 	IdMap.add (string_of_int num) 
-	  (AttrMap.add Value (Const (CString name)) AttrMap.empty) props in
+	  (mk_data_prop (Const (CString name))) props in
       let name_props = List.fold_right2 prop_folder 
 	(iota (List.length name_list))
 	name_list
@@ -190,14 +190,11 @@ and all_protos o =
 	  end
     | _ -> []
 
-and enum prop = AttrMap.mem Enum prop && 
-  (AttrMap.find Enum prop = Const (CBool true))
-
 let get_own_property_names obj = match obj with
   | ObjCell o ->
       let { props ; _ } = !o in
       let add_name n x m = 
-	IdMap.add (string_of_int x) (AttrMap.add Value (str n) AttrMap.empty) m in
+	IdMap.add (string_of_int x) (mk_data_prop (str n)) m in
       let namelist = IdMap.fold (fun k v l -> (k :: l)) props [] in
       let props = 
 	List.fold_right2 add_name namelist (iota (List.length namelist)) IdMap.empty

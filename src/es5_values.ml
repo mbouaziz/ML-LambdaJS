@@ -2,7 +2,15 @@ open Prelude
 open JavaScript_syntax
 open Es5_syntax
 
-type obj = { attrs : value IdMap.t ; props : (value AttrMap.t) IdMap.t }
+type obj = { attrs : value IdMap.t ; props : prop IdMap.t }
+and prop = {
+  value : value option;
+  getter : obj ref option;
+  setter : obj ref option;
+  config : bool;
+  writable : bool;
+  enum : bool;
+}
 and value =
   | Const of JavaScript_syntax.const
   | ObjCell of obj ref
@@ -14,6 +22,15 @@ type label = string
 
 exception Break of label * value
 exception Throw of value
+
+let empty_prop = {
+  value = None; getter = None; setter = None;
+  config = false; writable = false; enum = false;
+}
+let mk_data_prop ?(b=false) v = {
+  value = Some v; getter = None; setter = None;
+  config = b; writable = b; enum = b;
+}
 
 let rec pretty_value v = match v with 
   | Const c -> begin match c with
