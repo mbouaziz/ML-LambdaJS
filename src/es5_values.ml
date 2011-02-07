@@ -2,7 +2,13 @@ open Prelude
 open JavaScript_syntax
 open Es5_syntax
 
-type obj = { attrs : value IdMap.t ; props : prop IdMap.t }
+type obj = {
+  props : prop IdMap.t;
+  proto : obj ref option;
+  extensible : bool;
+  _class : string;
+  code : (value list -> value) option;
+}
 and prop = {
   value : value option;
   getter : obj ref option;
@@ -23,10 +29,21 @@ type label = string
 exception Break of label * value
 exception Throw of value
 
-let empty_prop = {
-  value = None; getter = None; setter = None;
-  config = false; writable = false; enum = false;
+let empty_obj = {
+  props = IdMap.empty; proto = None;
+  extensible = false; _class = "Object"; code = None;
 }
+let mk_obj props = {
+  props; proto = None;
+  extensible = false; _class = "Object"; code = None;
+}
+
+let mk_empty_prop b = {
+  value = None; getter = None; setter = None;
+  config = b; writable = b; enum = b;
+}
+let empty_prop = mk_empty_prop false
+let empty_prop_true = mk_empty_prop true
 let mk_data_prop ?(b=false) v = {
   value = Some v; getter = None; setter = None;
   config = b; writable = b; enum = b;

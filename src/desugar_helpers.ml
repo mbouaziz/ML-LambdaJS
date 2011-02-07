@@ -6,6 +6,7 @@ module S = JavaScript_syntax
 
 let true_c p = { p ; e = EConst (S.CBool true) }
 let false_c p = { p ; e = EConst (S.CBool false) }
+let bool_c p b = { p ; e = EConst (S.CBool b) }
 
 let undef_c p = { p ; e = EConst S.CUndefined }
 
@@ -22,22 +23,22 @@ let fun_proto ?(from_parser=false) p = { p ; e = EId (if from_parser then "Funct
 let to_object p e = { p ; e = EApp ({ p ; e = EId "[[ToObject]]" }, [e]) }
 let to_string p e = { p ; e = EApp ({ p ; e = EId "[[ToString]]" }, [e]) }
 
-let rec mk_val p v =
+let mk_val ?(config=true) ?(enum=true) p v =
   [(Value, v);
-   (Enum, true_c p);
-   (Config, true_c p);
+   (Enum, bool_c p enum);
+   (Config, bool_c p config);
    (Writable, true_c p)]
 
-let mk_field (p, s, e) =
+let mk_field ?(config=true) ?(enum=true) (p, s, e) =
   match e with
-    | _ -> (s, mk_val p e)
+    | _ -> (s, mk_val ~config ~enum p e)
 
 let mk_array (p, exps) =
   let mk_num_field n v = (string_of_int n, mk_val p v) in
   { p ; e = EObject ([("proto", { p ; e = EId "[[Array_prototype]]" });
 		      ("extensible", true_c p);
 		      ("class", str p "Array")],
-		     ((mk_field (p, "length", int_c p (List.length exps)))
+		     ((mk_field ~config:false ~enum:false (p, "length", int_c p (List.length exps)))
 		      :: List.map2 mk_num_field (iota (List.length exps)) exps)) }
 
 (* 10.6 *)
@@ -49,8 +50,6 @@ let args_obj ?(from_parser=false) ?(strict_mode=false) p arg_list =
      ("extensible", if strict_mode then false_c p else true_c p)]
       (* Need true here because of function body desugaring. Turned into false into every desugared function *)
   in
-  let attrs = if strict_mode then attrs else ("configurable", true_c p)::attrs in
-  (* Need configurable to remove fields *)
   { p ; e = EObject 
       (* 10.6 steps 4, 6 *)
       (
@@ -64,7 +63,7 @@ let args_obj ?(from_parser=false) ?(strict_mode=false) p arg_list =
 	::("callee", [(Getter, { p ; e = EId "[[ThrowTypeError]]" });
 		      (Setter, { p ; e = EId "[[ThrowTypeError]]" });
 		      (Enum, false_c p);
-		      (Config, false_c p)])
+		      (Config, true_c p)])
 	::("caller", [(Getter, { p ; e = EId "[[ThrowTypeError]]" });
 		      (Setter, { p ; e = EId "[[ThrowTypeError]]" });
 		      (Enum, false_c p);

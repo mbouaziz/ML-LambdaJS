@@ -15,51 +15,37 @@ let rec apply func args = match func with
 (* args is the "arguments" object *)
 let rec apply_obj o this args = match o with
   | ObjCell c -> 
-      let { attrs ; props } = !c in
-	begin
-	  try
-	    let code_attr = IdMap.find "code" attrs in
-	      apply code_attr [this; args]
-	  with Not_found ->
-	    Fail "Applying inapplicable object!"
-	end
+      let { code ; _ } = !c in
+      begin match code with
+      | Some cl -> apply (Closure cl) [this; args]
+      | None -> Fail "Applying inapplicable object!"
+      end
   | _ -> Fail "Applying non-object!"
 	  
 
-let rec get_field p obj1 obj2 field args = match obj1 with
-  | Const (CNull) -> Const (CUndefined) (* nothing found *)
-  | ObjCell c ->
-      let { attrs ; props } = !c in
-      begin match IdMap.find_opt field props with
-      | Some prop ->
-	  begin match prop.value with
-	  | Some value -> value
-	  | None -> match prop.getter with
-	    | Some getter -> apply_obj (ObjCell getter) obj2 (apply args [ObjCell getter])
-	    | None -> Const CUndefined
-	  end
-      | None ->
-	  match IdMap.find_opt "proto" attrs with
-	  | Some proto -> get_field p proto obj2 field args
-	  | None -> Const CUndefined (* No prototype found *)
+let rec obj_get_field cell1 obj_this field args =
+  let { props ; proto ; _ } = !cell1 in
+  match IdMap.find_opt field props with
+  | Some prop ->
+      begin match prop.value with
+      | Some value -> value
+      | None -> match prop.getter with
+	| Some getter -> apply_obj (ObjCell getter) obj_this (apply args [ObjCell getter])
+	| None -> Const CUndefined
       end
-  | _ -> failwith (interp_error p 
-		     "get_field received (or reached) a non-object.  The expression was (get-field " 
-		   ^ pretty_value obj1 
-		   ^ " " ^ pretty_value obj2 
-		   ^ " " ^ field ^ ")")
-
+  | None -> match proto with
+      | Some c -> obj_get_field c obj_this field args
+      | None -> Const CUndefined (* No prototype found *)
 
 (* EUpdateField-Add *)
 (* ES5 8.12.5, step 6 *)
 let rec add_field obj field newval = match obj with
-  | ObjCell c -> let { attrs ; props } = !c in
-      if IdMap.mem "extensible" attrs &&
-	((IdMap.find "extensible" attrs) = (Const (CBool true))) then begin
-	  c := { attrs ; props = IdMap.add field (mk_data_prop ~b:true newval) props };
-	  newval
-	end
-      else Const CUndefined	
+  | ObjCell c -> let { extensible ; props ; _ } as o = !c in
+      if extensible then begin
+	c := { o with props = IdMap.add field (mk_data_prop ~b:true newval) props };
+	newval
+      end else
+	Const CUndefined	
   | _ -> failwith ("[interp] add_field given non-object.")
 
 (* Both functions (because a property can satisfy writable and not_writable) *)
@@ -73,36 +59,34 @@ let rec not_writable prop =
 
 (* EUpdateField *)
 (* ES5 8.12.4, 8.12.5 *)
-let rec update_field obj1 obj2 field newval args = match obj1 with
-    (* 8.12.4, step 4 *)
-  | Const (CNull) -> add_field obj2 field newval
-  | ObjCell c -> let { attrs ; props } = !c in
-    begin match IdMap.find_opt field props with
-    | None ->
-	begin match IdMap.find_opt "proto" attrs with
-	| Some proto -> update_field proto obj2 field newval args (* EUpdateField-Proto *)
-	| None -> add_field obj2 field newval (* 8.12.4, step 4, sort of.  Handles if proto doesn't exist *)
-	end
-    | Some prop ->
-	if prop.writable then 
-	  if not (obj1 == obj2) then
+let rec obj_update_field cell1 obj_this field newval args =
+  let { props ; proto ; _ } as o = !cell1 in
+  begin match IdMap.find_opt field props with
+  | None ->
+      begin match proto with
+      | Some c -> obj_update_field c obj_this field newval args (* EUpdateField-Proto *)
+      | None -> add_field obj_this field newval (* 8.12.4, step 4, sort of.  Handles if proto doesn't exist *)
+      end
+  | Some prop ->
+      if prop.writable then
+	begin match obj_this with
+	| ObjCell cell2 when cell1 != cell2 ->
 	    (* 8.12.4, last step where inherited.[[writable]] is true *)
-	    add_field obj2 field newval
-	  else begin
+	    add_field obj_this field newval
+	| _ ->
 	    (* 8.12.5, step 3 *)
-	    c := { attrs ; props = IdMap.add field { prop with value = Some newval } props };
+	    cell1 := { o with props = IdMap.add field { prop with value = Some newval } props };
 	    newval
-	  end
-	else begin match prop.setter with (* 8.12.5, step 5 *)
-	| Some setter -> apply_obj (ObjCell setter) obj2 (apply args [ObjCell setter])
-	| None -> Fail "Field not writable!"
 	end
-    end
-  | _ -> failwith ("[interp] set_field received (or found) a non-object.  The call was (set-field " ^ pretty_value obj1 ^ " " ^ pretty_value obj2 ^ " " ^ field ^ " " ^ pretty_value newval ^ ")" )
+      else begin match prop.setter with (* 8.12.5, step 5 *)
+      | Some setter -> apply_obj (ObjCell setter) obj_this (apply args [ObjCell setter])
+      | None -> Fail "Field not writable!"
+      end
+  end
 
 let rec get_attr attr obj field = match obj, field with
   | ObjCell c, Const (CString s) ->
-      let { attrs ; props } = !c in
+      let { props ; _ } = !c in
       begin match IdMap.find_opt s props with
       | None ->	undef
       | Some prop ->
@@ -124,10 +108,7 @@ let is_data prop = prop.value <> None
 
 
 let fun_obj objcell =
-  let { attrs = props ; _ } = !objcell in (* attrs OR props ??? *)
-  match IdMap.find_opt "code" props with
-  | Some (Closure _) -> true
-  | _ -> false
+  let { code ; _ } = !objcell in code <> None
 
 let prop_add_attr prop attr newval ~config ~writable =
   match attr, newval, config, writable with
@@ -158,21 +139,19 @@ let prop_add_attr prop attr newval ~config ~writable =
 *)
 let set_attr attr obj field newval = match obj, field with
   | ObjCell c, Const (CString f_str) ->
-      let { attrs ; props } = !c in
+      let { props ; extensible ; _ } as o = !c in
       begin match IdMap.find_opt f_str props with
       | None ->
-	  begin match IdMap.find_opt "extensible" attrs with
-	  | Some (Const (CBool true)) ->
-	      let new_prop = prop_add_attr empty_prop attr newval ~config:true ~writable:true in
-	      c := { attrs ; props = IdMap.add f_str new_prop props };
-	      newval
-	  | Some _ -> failwith ("[interp] Extensible not true on object to extend with an attr")
-	  | None -> failwith ("[interp] No extensible property on object to extend with an attr")
-	  end
+	  if extensible then begin
+	    let new_prop = prop_add_attr empty_prop_true attr newval ~config:true ~writable:true in
+	    c := { o with props = IdMap.add f_str new_prop props };
+	    newval
+	  end else
+	    failwith ("[interp] Extensible not true on object to extend with an attr")
       | Some prop ->
 	  (* 8.12.9: "If a field is absent, then its value is considered to be false" *)
 	  let new_prop = prop_add_attr prop attr newval ~config:prop.config ~writable:prop.writable in
-	  c := { attrs ; props = IdMap.add f_str new_prop props };
+	  c := { o with props = IdMap.add f_str new_prop props };
 	  newval
       end
   | _ -> failwith ("[interp] set-attr didn't get an object and a string")
@@ -181,7 +160,9 @@ let set_attr attr obj field newval = match obj, field with
    undefined..." *)
 	  
 
-let rec eval ({ p ; e } : prim_exp) env = match e with
+let rec eval ({ p ; e } : prim_exp) env =
+  (* prerr_endline (string_of_position p); *)
+  match e with
   | EConst c -> Const c
   | EId x -> begin
       try
@@ -200,58 +181,60 @@ let rec eval ({ p ; e } : prim_exp) env = match e with
 		    (string_of_position p))
     end
   | EObject (attrs, props) ->
-      let eval_obj_attr m (name, e) = IdMap.add name (eval e env) m in
+      let eval_obj_attr obj (name, e) = match name, eval e env with
+      | "proto", Const (CUndefined | CNull) -> { obj with proto = None }
+      | "proto", ObjCell c -> { obj with proto = Some c }
+      | "proto", _ -> failwith (sprintf "[interp] Internal property \"proto\" must have type object or null, at %s" (string_of_position p))
+      | "extensible", Const (CBool extensible) -> { obj with extensible }
+      | "extensible", _ -> failwith (sprintf "[interp] Internal property \"extensible\" must have type bool, at %s" (string_of_position p))
+      | "class", Const (CString _class) -> { obj with _class }
+      | "class", _ -> failwith (sprintf "[interp] Internal property \"class\" must have type string, at %s" (string_of_position p))
+      | "code", Const (CUndefined | CNull) -> { obj with code = None }
+      | "code", Closure c -> { obj with code = Some c }
+      | "code", _ -> failwith (sprintf "[interp] Internal property \"code\" must be a closure or undefined, at %s" (string_of_position p))
+      | _ -> failwith (sprintf "[interp] Unknown internal property %S, at %s" name (string_of_position p))
+      in
       let eval_prop_attr prop (attr, e) = prop_add_attr prop attr (eval e env) ~config:true ~writable:true in
-      let eval_prop m (name, attrs) = 
-	IdMap.add name (fold_left eval_prop_attr empty_prop attrs) m in
-	ObjCell (ref { attrs = fold_left eval_obj_attr IdMap.empty attrs ;
+      let eval_prop m (name, attrs) = IdMap.add name (fold_left eval_prop_attr empty_prop attrs) m in
+      ObjCell (ref { (fold_left eval_obj_attr empty_obj attrs) with
 		       props = fold_left eval_prop IdMap.empty props })
   | EUpdateFieldSurface (obj, f, v, args) ->
       let obj_value = eval obj env in
       let f_value = eval f env in
       let v_value = eval v env in
-      let args_value = eval args env in begin
-	match (obj_value, f_value) with
-	  | (ObjCell o, Const (CString s)) ->
-	      update_field obj_value 
-		obj_value 
-		s
-		v_value
-		args_value
-	  | _ -> failwith ("[interp] Update field didn't get an object and a string" 
-			   ^ string_of_position p)
-	end
+      let args_value = eval args env in
+      begin match obj_value, f_value with
+      | ObjCell o, Const (CString field) -> obj_update_field o obj_value field v_value args_value
+      | _ -> failwith ("[interp] Update field didn't get an object and a string" ^ string_of_position p)
+      end
   | EGetFieldSurface (obj, f, args) ->
       let obj_value = eval obj env in
       let f_value = eval f env in 
-      let args_value = eval args env in begin
-	match (obj_value, f_value) with
-	  | (ObjCell o, Const (CString s)) ->
-	      get_field p obj_value obj_value s args_value
-	  | _ -> failwith ("[interp] Get field didn't get an object and a string at " 
-			   ^ string_of_position p 
-			   ^ ". Instead, it got " 
-			   ^ pretty_value obj_value 
-			   ^ " and " 
-			   ^ pretty_value f_value)
-	end
+      let args_value = eval args env in
+      begin match obj_value, f_value with
+      | Const CNull, Const (CString _) -> Const CUndefined
+      | ObjCell o, Const (CString s) -> obj_get_field o obj_value s args_value
+      | _ -> failwith ("[interp] Get field didn't get an object and a string at " 
+		       ^ string_of_position p 
+		       ^ ". Instead, it got " 
+		       ^ pretty_value obj_value 
+		       ^ " and " 
+		       ^ pretty_value f_value)
+      end
   | EDeleteField (obj, f) ->
       let obj_val = eval obj env in
-      let f_val = eval f env in begin
-	match (obj_val, f_val) with
-	  | (ObjCell c, Const (CString s)) ->
-	      let { attrs ; props } = !c in
-		if IdMap.mem s props 
-		  && IdMap.mem "configurable" attrs
-		  && (IdMap.find "configurable" attrs) == Const (CBool true)
-		then begin
-		  c := { attrs ; props = IdMap.remove s props };
-		  Const (CBool true)
-		end
-		else Const (CBool false)
-	  | _ -> failwith ("[interp] EDeleteField didn't get an object and string at " ^
-			     string_of_position p)
-	end
+      let f_val = eval f env in
+      begin match obj_val, f_val with
+      | ObjCell c, Const (CString s) ->
+	  let { props ; _ } as o = !c in
+	  begin match IdMap.find_opt s props with
+	  | Some { config = true ; _ } ->
+	      c := { o with props = IdMap.remove s props };
+	      Const (CBool true)
+	  | _ -> Const (CBool false)
+	  end
+      | _ -> failwith ("[interp] EDeleteField didn't get an object and string at " ^ string_of_position p)
+      end
   | EAttr (attr, obj, field) ->
       let obj_val = eval obj env in
       let f_val = eval field env in
@@ -341,7 +324,7 @@ with
       let err_msg = 
 	match v with
 	  | ObjCell c ->
-	      let { attrs ; props } = !c in
+	      let { props ; _ } = !c in
 	      begin match IdMap.find_opt "message" props with
 	      | Some { value = Some msg_val ; _ } -> pretty_value msg_val
 	      | _ -> pretty_value v

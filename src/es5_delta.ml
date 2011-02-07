@@ -54,8 +54,8 @@ let surface_typeof v = str begin match v with
       | CBool _ -> "boolean"
       | CRegexp _ -> failwith "surface_typeof regexp"
     end
-  | ObjCell o -> let { attrs ;  _ } = !o in
-      if (IdMap.mem "code" attrs) then "function" else "object"
+  | ObjCell o -> let { code ;  _ } = !o in
+    if code = None then "object" else "function"
   | _ -> raise (Throw (str "surface_typeof"))
 end
   
@@ -116,12 +116,7 @@ let prim_to_bool v = bool begin match v with
 end
 
 let is_callable obj = bool begin match obj with
-  | ObjCell o -> let { attrs ; props } = !o in begin try
-      match IdMap.find "code" attrs with
-	| Closure c -> true
-	| _ -> false
-    with Not_found -> false
-    end
+  | ObjCell o -> let { code ; _ } = !o in code <> None
   | _ -> false
 end
 
@@ -131,43 +126,35 @@ let print v = match v with
   | _ -> failwith ("[interp] Print received non-string: " ^ pretty_value v)
 
 let is_extensible obj = match obj with
-  | ObjCell o ->
-      let { attrs ; props } = !o in begin try
-	bool (IdMap.find "extensible" attrs =
-		bool true)
-	with Not_found -> bool false
-	end
+  | ObjCell o -> let { extensible ; _ } = !o in bool extensible
   | _ -> raise (Throw (str "is-extensible"))
 
 let prevent_extensions obj = match obj with
   | ObjCell o ->
-      let { attrs ; props } = !o in begin
-	  o := { attrs = IdMap.add "extensible" (bool false) attrs ; props };
-	  obj
-	end
+      o := { !o with extensible = false };
+      obj
   | _ -> raise (Throw (str "prevent-extensions"))
 	  
 
 let get_proto obj = match obj with
   | ObjCell o -> 
-      let { attrs ; _ } = !o in begin try
-	  IdMap.find "proto" attrs
-	with Not_found -> undef
-	end
+      let { proto ; _ } = !o in
+      begin match proto with
+      | None -> undef
+      | Some p -> ObjCell p
+      end
   | _ -> raise (Throw (str "get-proto"))
 
 
 (* All the enumerable property names of an object *)
 let rec get_property_names obj = match obj with
   | ObjCell o ->
-      let protos = obj::(all_protos obj) in
-      let folder o set = begin match o with
-	| ObjCell o' ->
-	    let { attrs ; props } = !o' in
-	      IdMap.fold (fun k v s -> 
-			    if v.enum then IdSet.add k s else s) props set
-	| _ -> set (* non-object prototypes don't contribute *) 
-      end in
+      let protos = o::(all_protos o) in
+      let folder o set =
+	let { props ; _ } = !o in
+	IdMap.fold (fun k v s -> 
+		      if v.enum then IdSet.add k s else s) props set
+      in
       let name_set = List.fold_right folder protos IdSet.empty in
       let name_list= IdSet.elements name_set in
       let prop_folder num name props = 
@@ -177,18 +164,14 @@ let rec get_property_names obj = match obj with
 	(iota (List.length name_list))
 	name_list
 	IdMap.empty in
-	ObjCell (ref { attrs = IdMap.empty ; props = name_props })
+	ObjCell (ref (mk_obj name_props ))
   | _ -> raise (Throw (str "get-property-names"))
 
-and all_protos o = 
-  match o with
-    | ObjCell c ->
-	let { attrs ; props } = !c in begin try
-	    let proto = (IdMap.find "proto" attrs) in
-	      proto::(all_protos proto)
-	  with Not_found -> []
-	  end
-    | _ -> []
+and all_protos cell = 
+  let { proto ; _ } = !cell in
+  match proto with
+  | None -> []
+  | Some c -> c::(all_protos c)
 
 let get_own_property_names obj = match obj with
   | ObjCell o ->
@@ -199,27 +182,17 @@ let get_own_property_names obj = match obj with
       let props = 
 	List.fold_right2 add_name namelist (iota (List.length namelist)) IdMap.empty
       in
-	ObjCell (ref { attrs = IdMap.empty; props })
+	ObjCell (ref (mk_obj props ))
   | _ -> raise (Throw (str "own-property-names"))
 
 (* Implement this here because there's no need to expose the class
    property outside of the delta function *)
 let object_to_string obj = match obj with
-  | ObjCell o -> let { attrs ; props } = !o in begin try
-      match IdMap.find "class" attrs with
-	| Const (CString s) -> str ("[object " ^ s ^ "]")
-	| _ -> raise (Throw (str "object-to-string, class wasn't a string"))	
-    with Not_found -> raise (Throw (str "object-to-string, didn't find class"))
-    end
+  | ObjCell o -> let { _class ; _ } = !o in str ("[object " ^ _class ^ "]")
   | _ -> raise (Throw (str "object-to-string, wasn't given object"))	
 
 let is_array obj = match obj with
-  | ObjCell o -> let { attrs ; props } = !o in begin try
-      match IdMap.find "class" attrs with
-	| Const (CString "Array") -> Const (CBool true)
-	| _ -> Const (CBool false)
-    with Not_found -> raise (Throw (str "is-array"))
-    end
+  | ObjCell o -> let { _class ; _ } = !o in bool (_class = "Array")
   | _ -> raise (Throw (str "is-array"))	
 
 
@@ -302,7 +275,9 @@ let stx_eq v1 v2 = bool begin match v1, v2 with
   | Const (CInt x2), Const (CNum x1) -> 
       float_of_int x2 = x1
   | Const c1, Const c2 -> c1 = c2 (* syntactic on primitives *)
-  | _ -> v1 == v2 (* otherwise, pointer equality *)
+  | ObjCell c1, ObjCell c2 -> c1 == c2 (* otherwise, pointer equality *)
+  | Closure c1, Closure c2 -> c1 == c2
+  | _ -> false
 end
 
 (* Algorithm 11.9.3, steps 1 through 19. Steps 20 and 21 are desugared to
@@ -330,20 +305,21 @@ let abs_eq v1 v2 = bool begin
       | _ -> false
 end
 
-let rec has_property obj field = match obj, field with
+let has_property obj field = match obj, field with
   | ObjCell o, Const (CString s) ->
-      let { attrs ; props } = !o in
-	if (IdMap.mem s props) then bool true
-	else begin try
-	  let proto = IdMap.find "proto" attrs in
-	   has_property proto field 
-	with Not_found -> bool false
-	end
+      let rec obj_has_property o =
+	let { proto ; props ; _ } = !o in
+	if IdMap.mem s props then bool true
+	else match proto with
+	| Some c -> obj_has_property c
+	| None -> bool false
+      in
+      obj_has_property o
   | _ -> bool false
 
 let has_own_property obj field = match obj, field with
   | ObjCell o, Const (CString s) -> 
-      let { attrs ; props } = !o in
+      let { props ; _ } = !o in
 	bool (IdMap.mem s props)
   | _ -> raise (Throw (str "has-own-property?"))
 

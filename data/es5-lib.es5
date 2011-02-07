@@ -393,7 +393,7 @@ let [[global]] = { [proto: null, class: "Lambda-JS global", extensible: true]
 
 let [[isDataField]] = func(obj, field) {
     return ((obj[field<#value>] !== undefined) ||
-	    (obj[field<#writable>] !== undefined))
+	    (obj[field<#writable>] !== false))
 }
 
 let [[isAccessorField]] = func(obj, field) {
@@ -968,7 +968,7 @@ let [[array-slice]] = func(array, start, end) {
     }];
 
     Array_prototype["toString" = function() {
-	return this["join"](this, one-arg(","))
+	return array-join(this, ",")
     }];
 
     Array_prototype["slice" = function(start, end) { 
