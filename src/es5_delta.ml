@@ -297,11 +297,13 @@ let abs_eq v1 v2 = bool begin
       | CInt n, CString s ->
           (try float_of_int n = float_of_string s with Failure _ -> false)
       | CNum x, CBool b
-      | CBool b, CNum x -> x = (if b then 1.0 else 0.0)
+      | CBool b, CNum x -> x = if b then 1.0 else 0.0
       | CInt n, CBool b
-      | CBool b, CInt n -> n = (if b then 1 else 0)
+      | CBool b, CInt n -> n = if b then 1 else 0
       | CNum x1, CInt x2
       | CInt x2, CNum x1 -> float_of_int x2 = x1
+      | CBool b, CString s
+      | CString s, CBool b -> (try float_of_string s = if b then 1.0 else 0.0 with Failure _ -> false)
       | _ -> false
 end
 
