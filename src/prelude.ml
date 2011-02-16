@@ -103,6 +103,7 @@ struct
     val from_list : elt list -> t
     val to_list : t -> elt list
     val p_set : (elt -> printer) -> t -> printer
+    val fold_i : (int -> elt -> 'a -> 'a) -> t -> 'a -> 'a
   end
 
   module Make (Ord : OrderedType) : S with type elt = Ord.t =
@@ -119,6 +120,10 @@ struct
 
     let p_set p_elt set = 
       braces (horz (List.map p_elt (to_list set)))
+
+    let fold_i f set acc =
+      let f' elt (i, acc) = i+1, f i elt acc in
+      snd (fold f' set (0, acc))
   end
 end
 
@@ -143,6 +148,7 @@ struct
     val join : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
     val p_map : (key -> printer) -> ('a -> printer) -> 'a t -> printer
     val diff : 'a t -> 'a t -> 'a t
+    val fold_i : (int -> key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
   end
 
   module Make (Ord : OrderedType) : S with type key = Ord.t =
@@ -190,9 +196,12 @@ struct
               (to_list t))
 
     let diff m1 m2 = 
-      let fn key v acc =
-	if mem key m2 then acc else add key v acc in
-      fold fn m1 empty
+      let f key v acc =	if mem key m2 then acc else add key v acc in
+      fold f m1 empty
+
+    let fold_i f m acc =
+      let f' k a (i, acc) = i+1, f i k a acc in
+      snd (fold f' m (0, acc))
   end
 end
 

@@ -49,6 +49,7 @@ module Set : sig
     val from_list : elt list -> t
     val to_list : t -> elt list
     val p_set : (elt -> printer) -> t -> printer
+    val fold_i : (int -> elt -> 'a -> 'a) -> t -> 'a -> 'a
   end
   module Make (Ord : OrderedType) : S with type elt = Ord.t
 end
@@ -72,6 +73,7 @@ sig
     val join : (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
     val p_map : (key -> printer) -> ('a -> printer) -> 'a t -> printer
     val diff : 'a t -> 'a t -> 'a t
+    val fold_i : (int -> key -> 'a -> 'b -> 'b) -> 'a t -> 'b -> 'b
   end
   module Make (Ord : OrderedType) : S with type key = Ord.t
 end
