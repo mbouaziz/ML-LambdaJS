@@ -32,11 +32,12 @@ let func_object = func_object ~from_parser:true
 
 %token EOF
 %left COLONEQ
-%left LPAREN
 %left PIPEPIPE
 %left AMPAMP
 %left EQEQEQUALS BANGEQEQUALS
 %left LBRACK
+%left LPAREN
+
 
 /* http://stackoverflow.com/questions/1737460/
    how-to-find-shift-reduce-conflict-in-this-yacc-file */
