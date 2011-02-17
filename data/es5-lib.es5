@@ -10,6 +10,26 @@
 //  Need this for nearly everything
 let [[Object_prototype]] = {[extensible: true, class: "Object", proto: null]}
 
+let [[Function_prototype]] = {[extensible: true, class: "Function", proto: Object_prototype]}
+
+let [[TypeError_prototype]] = {[extensible:true]}
+
+// Must be before any field access!
+// Hack, a first approximation of ThrowTypeError
+/* 13.2.3 */
+let [[ThrowTypeError]] = {
+    [class: "Function",
+     proto: Function_prototype,
+     code: func(this, arguments) {
+	 return throw {[class:"Error", proto: TypeError_prototype, extensible: true] message: {#value : arguments["0"<#value>] }}
+     },
+     extensible: false]
+    length: {#value: 0,
+	     #enumerable: false,
+	     #writable: false,
+	     #configurable: false}
+  }
+
 // *******************************************************************
 // Utilities
 //
@@ -28,12 +48,13 @@ let [[args-array]] = func(alist) {
 	     return 
 	     let (str-index = prim("prim->str", curr-index))
 	     if (prim("has-own-property?", alist, str-index)) { 
-		 let (nextval = alist[str-index])
-		 ar-acc[str-index = nextval];
+                 let (nextval = alist[str-index])
+                 ar-acc[str-index = nextval];
 		 aa(ar-acc, prim("+", curr-index, 1))
 	     }
 	     else { 
-		 ar-acc 
+		 ar-acc["length" = curr-index];
+		 ar-acc
 	     }
 	 })
     add_arg(arr, 0)
@@ -53,11 +74,31 @@ let [[two-args]] = func(arg1, arg2) {
 			"1": {#value: arg2}})
 }
 
+let [[extend]] = func(obj1, obj2)
+{
+    return
+    let (propnames = prim("own-property-names", obj2))
+    let (iter = fix iter func(i) {
+	return
+	let (curr = propnames[prim("prim->str", i)])
+	if (curr === undefined) {
+	    undefined
+	}
+	else {
+	    obj1[curr = obj2[curr] ];
+	    obj1[curr<#enumerable> = false];
+	    obj1[curr<#writable> = false];
+	    obj1[curr<#configurable> = false];
+	    iter(prim("+",i,1))
+	}
+    })
+    iter(0)
+}
+
 let [[max]] = func(n1, n2) { return if(prim(">", n1, n2)) n1 else n2 }
 let [[min]] = func(n1, n2) { return if(prim(">", n1, n2)) n2 else n1 }
 
 let [[global]] = {[extensible: true, class: "LambdaJS global", proto: null]}
-let [[Function_prototype]] = {[extensible: true, class: "Function", proto: Object_prototype]}
 let [[String_prototype]] = {[extensible: true, class: "Object", proto: Object_prototype]}
 let [[Array_prototype]] = {[extensible: true, class: "Array", proto: Object_prototype]}
 
@@ -154,6 +195,8 @@ let [[ToUInt]] = func (n) {
 		     function() { return prim("object-to-string", this) }]
 }
 
+// Bug: recursion between Error & Error_prototype
+
 // 15.11.4
 let [[Error_prototype]] = 
     {[class: "Error", proto: Object_prototype, extensible: false]
@@ -205,12 +248,12 @@ let [[makeNativeErrorPrototype]] = func(constr, name_str) {
 		   #enumerable: false}}
 }
 
-
-let [[TypeError_prototype]] = 
-    {[]
+{
+  extend(TypeError_prototype, {[]
      toString: {#value: function() {
 	 return ToString(this["message"])
-     }}}
+     }}})
+}
 
 let [[TypeError]] = function(msg) {
     return
@@ -235,7 +278,8 @@ let [[type_error]] = func(msg) {
 }
 
 /* 13.2.3 */
-let [[ThrowTypeError]] = {
+{
+  ThrowTypeError := {
     [class: "Function",
      proto: Function_prototype,
      code: func(this, arguments) {
@@ -246,6 +290,7 @@ let [[ThrowTypeError]] = {
 	     #enumerable: false,
 	     #writable: false,
 	     #configurable: false}
+  }
 }
 
 // 9.9
@@ -309,7 +354,7 @@ let [[call]] = function(thisarg) {
     Function_prototype["call" = call]
 }
 
-// 15.3.4.2
+// 15.3.4.3
 let [[apply]] = function(thisarg, arglist) {
     return 
     if (arglist === undefined || arglist === null) {
@@ -329,10 +374,13 @@ let [[apply]] = function(thisarg, arglist) {
 		throw call-no-args(TypeError)
 	    }
 	    else {
-		this(thisargs, args-array(arglist))
+		this(thisarg, args-array(arglist))
 	    }
 	}
     }
+}
+{
+   Function_prototype["apply" = apply]
 }
 
 let [[create]] = function(proto) {
@@ -362,19 +410,10 @@ let [[Object]] =
 
 let [[eval]] = function(s) { return prim("eval", ToString(s)) }
 
-let [[global]] = { [proto: null, class: "Lambda-JS global", extensible: true]
-		   "NaN": {#value: NaN,
-			   #writable: false,
-			   #enumerable: false,
-			   #configurable: false},
-		   "Infinity":  {#value: +inf,
-				 #writable: false,
-				 #enumerable: false,
-				 #configurable: false},
-		   "undefined": {#value: undefined,
-				 #writable: false,
-				 #enumerable: false,
-				 #configurable: false},
+{
+  extend(global,{[]"NaN": {#value: NaN},
+		   "Infinity":  {#value: +inf},
+		   "undefined": {#value: undefined},
 		   "print": {#value: print},
 		   "Object" : {#value: Object},
 		   "Object_prototype" : {#value: Object_prototype},
@@ -383,8 +422,8 @@ let [[global]] = { [proto: null, class: "Lambda-JS global", extensible: true]
 		   "eval" : {#value: eval},
 		   "TypeError" : {#value: TypeError},
 		   "Error" : {#value: Error}
-		 }
-
+		 })
+}
 
 {
     global["window" = global]
@@ -450,6 +489,32 @@ let [[copy-access-desc]] = func(obj1, obj2) {
     obj1[delete "writable"]
 }
 
+let [[getOwnPropertyDescriptor]] = func(obj, field) {
+    return
+    let (fstring = ToString(field))
+    if (typeof obj !== "object") { throw type_error("getOwnPD didn't get object") }
+    else {
+	if(isDataField(obj, field)) {
+	    {[proto: Object, extensible: true]
+	     value: {#value: obj[field<#value>]},
+	     writable: {#value: obj[field<#writable>]},
+	     enumerable: {#value: obj[field<#enumerable>]},
+	     configurable: {#value: obj[field<#configurable>]}}
+	}
+	else if(isAccessorField(obj, field)) {
+	    {[proto: Object, extensible: true]
+	     get: {#value: obj[field<#getter>]},
+	     set: {#value: obj[field<#setter>]},
+	     enumerable: {#value: obj[field<#enumerable>]},
+	     configurable: {#value: obj[field<#configurable>]}}
+	} else {
+	    {[proto: Object, extensible: true]
+	     enumerable: {#value: obj[field<#enumerable>]},
+	     configurable: {#value: obj[field<#configurable>]}}
+	}
+    }
+}
+
 /* 8.12.9 */
 let [[defineOwnProperty]] = func(obj, field, attr-obj) {
     return
@@ -490,61 +555,62 @@ let [[defineOwnProperty]] = func(obj, field, attr-obj) {
 		    }
 		}
 	    };
-	    
-	    {if ((isDataDescriptor(current-prop)) !== (isDataDescriptor(attr-obj))) {
+	    let (current = getOwnPropertyDescriptor(obj, field))
+
+	    {if ((isDataDescriptor(current)) !== (isDataDescriptor(attr-obj))) {
 		if (obj[field<#configurable>] === false) {
 		    throw type_error("(defineOwnProperty) Non-configurable property")
 		}
 		else {
 		    if (isDataDescriptor(current)) {
-			copy-data-desc(current-obj, attr-obj)
+			copy-data-desc(current, attr-obj)
 		    }
 		    else {
-			copy-access-desc(current-obj, attr-obj)
+			copy-access-desc(current, attr-obj)
 		    }
 		}
 	    }
-	    else if ((isDataDescriptor(current-prop)) && 
+	    else if ((isDataDescriptor(current)) && 
 		     (isDataDescriptor(attr-obj))) {
-		if (current-prop["configurable"] === false) {
-		    if (current-prop["writable"] === false) {
+		if (current["configurable"] === false) {
+		    if (current["writable"] === false) {
 			if (attr-obj["writable"] === true) {
 			    throw type_error("(defineOwnProperty) Cannot escalate writable from false to true.")
 			}
 			else {
-			    if (attr-obj["value"] !== current-prop["value"]) {
+			    if (attr-obj["value"] !== current["value"]) {
 				throw type_error("(defineOwnProperty) Cannot change a non-configurable value")
 			    }
-			    else { copy-data-desc(current-prop, attr-obj) }
+			    else { copy-data-desc(current, attr-obj) }
 			}
 		    }
-		    else { copy-data-desc(current-prop, attr-obj) }
+		    else { copy-data-desc(current, attr-obj) }
 		}
-		else { copy-data-desc(current-prop, attr-obj) }
+		else { copy-data-desc(current, attr-obj) }
 	    }
 	    else {
-		if (current-prop["configurable"] === false) {
-		    if (current-prop["set"] !== attr-obj["set"] ||
-			current-prop["get"] !== attr-obj["get"]) {
+		if (current["configurable"] === false) {
+		    if (current["set"] !== attr-obj["set"] ||
+			current["get"] !== attr-obj["get"]) {
 			throw type_error("(defineOwnProperty) Cannot change setter or getter of non-configurable property.")
 		    }
-		    else { copy-access-desc(current-prop, attr-obj) }
+		    else { copy-access-desc(current, attr-obj) }
 		}
-		else { copy-access-desc(current-prop, attr-obj) }
+		else { copy-access-desc(current, attr-obj) }
 	    }};
 
-	    if(isDataDescriptor(current-prop)) {
-		obj[field<#value> = current-prop["value"] ];
-		obj[field<#writable> = current-prop["writable"] ]
+	    if(isDataDescriptor(current)) {
+		obj[field<#value> = current["value"] ];
+		obj[field<#writable> = current["writable"] ]
 	    }
-	    else if(isAccessorDescriptor(current-prop)) {
-		obj[field<#getter> = current-prop["get"] ];
-		obj[field<#setter> = current-prop["set"] ]
+	    else if(isAccessorDescriptor(current)) {
+		obj[field<#getter> = current["get"] ];
+		obj[field<#setter> = current["set"] ]
 	    }
 	    else { undefined };
 	    
-	    obj[field<#enumerable> = current-prop["enumerable"] ];
-	    obj[field<#configurable> = current-prop["configurable"] ];
+	    obj[field<#enumerable> = current["enumerable"] ];
+	    obj[field<#configurable> = current["configurable"] ];
 
 	    true
 	}
@@ -558,32 +624,6 @@ let [[newObject]] = func() {
     Object(newObj)
 }
 
-
-let [[getOwnPropertyDescriptor]] = func(obj, field) {
-    return
-    let (fstring = ToString(field))
-    if (typeof obj !== "object") { throw type_error("getOwnPD didn't get object") }
-    else {
-	if(isDataField(obj, field)) {
-	    {[proto: Object, extensible: true]
-	     value: {#value: obj[field<#value>]},
-	     writable: {#value: obj[field<#writable>]},
-	     enumerable: {#value: obj[field<#enumerable>]},
-	     configurable: {#value: obj[field<#configurable>]}}
-	}
-	else if(isAccessorField(obj, field)) {
-	    {[proto: Object, extensible: true]
-	     get: {#value: obj[field<#getter>]},
-	     set: {#value: obj[field<#setter>]},
-	     enumerable: {#value: obj[field<#enumerable>]},
-	     configurable: {#value: obj[field<#configurable>]}}
-	} else {
-	    {[proto: Object, extensible: true]
-	     enumerable: {#value: obj[field<#enumerable>]},
-	     configurable: {#value: obj[field<#configurable>]}}
-	}
-    }
-}
 
 {
     // 15.2.3.6, and 8.10.5
@@ -729,10 +769,6 @@ let [[in]] = func(obj, field) {
     return hasProperty(obj, field)
 }
 
-{
-    global["hasProperty" = has_property]
-}
-
 
 // Object (\String -> Any) -> Object
 // Calls the function with the object and each own property name in
@@ -836,7 +872,7 @@ let [[make-length-getter-setter]] = func() {
     // get the largest numeric property among the elements of array
     let (length-getter = func(array) {
 	return
-	let (max = 0)
+	let (max = -1)
 	let (iter-func = func(arr-obj, name)  {
 	    return
 	    let(num = ToUInt(name))
@@ -870,7 +906,7 @@ let [[make-length-getter-setter]] = func() {
 	    }
 	    else {
 		// keep deleting until we can't, or we're down to the new length
-		let (iter-func = func(ix) {
+		let (iter-func = fix iter-func func(ix) {
 		    return
 		    if (prim("<", int32len, ix) && array[delete ToString(ix)]) {
 			    iter-func(prim("-",ix,1))
@@ -908,6 +944,29 @@ let [[array-join]] = func(array, sep) {
 	})
 	iter-func(1, R)
     }
+}
+
+// 15.4.4.7
+let [[array-push]] = func(arr, items) {
+    return
+    let (O = ToObject(arr))
+    let (lenVal = O["length"])
+    let (n = ToUInt(lenVal))
+    let (push_items =
+    	 fix push_items func(O, n, curr-index) {
+	     return
+	     let (str-index = prim("prim->str", curr-index))
+	     if (prim("has-own-property?", items, str-index)) {
+	     	 let (str-n = prim("prim->str", n))
+		 O[str-n = items[str-index] ];
+		 push_items(O, prim("+", n, 1), prim("+", curr-index, 1))
+	     }
+	     else {
+	     	 O["length" = n];
+		 n
+	     }
+	 })
+    push_items(O, n, 0)
 }
 
 let [[Array]] = function(len) {
@@ -967,6 +1026,8 @@ let [[array-slice]] = func(array, start, end) {
 	return array-join(this, separator)
     }];
 
+    Array_prototype["push" = function() { return array-push(this, arguments) } ];
+
     Array_prototype["toString" = function() {
 	return array-join(this, ",")
     }];
@@ -977,7 +1038,7 @@ let [[array-slice]] = func(array, start, end) {
 }
 
 {
-    global["Array" = Array]
+    extend(global, {[] "Array": {#value : Array}})
 }
 
 let [[Math]] = {
@@ -1018,5 +1079,5 @@ let [[Math]] = {
 	    #enumerable: false}}
 
 {
-    global["Math" = Math]
+    extend(global, {[] "Math" : {#value : Math}})
 }
