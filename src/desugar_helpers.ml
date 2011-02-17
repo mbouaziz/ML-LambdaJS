@@ -50,6 +50,7 @@ let args_obj ?(from_parser=false) ?(strict_mode=false) p arg_list =
      ("extensible", if strict_mode then false_c p else true_c p)]
       (* Need true here because of function body desugaring. Turned into false into every desugared function *)
   in
+  let throwTypeError = if from_parser then "ThrowTypeError" else "[[ThrowTypeError]]" in
   { p ; e = EObject 
       (* 10.6 steps 4, 6 *)
       (
@@ -60,12 +61,12 @@ let args_obj ?(from_parser=false) ?(strict_mode=false) p arg_list =
 		    (Enum, false_c p);
 		    (Config, true_c p)])
 	  (* 10.6 step 13a *)
-	::("callee", [(Getter, { p ; e = EId "[[ThrowTypeError]]" });
-		      (Setter, { p ; e = EId "[[ThrowTypeError]]" });
+	::("callee", [(Getter, { p ; e = EId throwTypeError });
+		      (Setter, { p ; e = EId throwTypeError });
 		      (Enum, false_c p);
 		      (Config, true_c p)])
-	::("caller", [(Getter, { p ; e = EId "[[ThrowTypeError]]" });
-		      (Setter, { p ; e = EId "[[ThrowTypeError]]" });
+	::("caller", [(Getter, { p ; e = EId throwTypeError });
+		      (Setter, { p ; e = EId throwTypeError });
 		      (Enum, false_c p);
 		      (Config, false_c p)])
 	:: (List.map2 mk_field (iota (List.length arg_list)) arg_list))) }
