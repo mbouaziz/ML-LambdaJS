@@ -44,7 +44,7 @@ let dec_lit =
   ('.' dec_digit+ expt_part?) |
   (dec_int_lit expt_part?)
 
-let num_lit = dec_lit | hex_lit
+let num_lit = '-'? (dec_lit | hex_lit)
 
 let ident = ['a'-'z' 'A'-'Z' '$' '_']['a'-'z' 'A'-'Z' '0'-'9' '$' '_' '-']*
 
