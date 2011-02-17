@@ -4,6 +4,8 @@ module S = JavaScript_syntax
 
 open Format
 
+let opt_print_args = ref false
+
 let rec exp { p ; e } = match e with
   | EConst c -> const c
   | EId x -> text x
@@ -16,12 +18,14 @@ let rec exp { p ; e } = match e with
 		 [text "update-field";
 		 exp o;
 		 exp f;
-		 exp v])
+		 exp v;
+		 if !opt_print_args then exp args else text "";])
   | EGetFieldSurface (o, f, args) ->
       parens (horz 
 		 [text "get-field";
 		 exp o;
-		 exp f;])
+		 exp f;
+		 if !opt_print_args then exp args else text "";])
   | EDeleteField (o1, f) ->
       parens (horz
 		 [text "delete-field";
